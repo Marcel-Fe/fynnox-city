@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import type { CollisionWorld } from '../core/CollisionWorld'
 import { cameraProfile } from '../contracts/manifests'
+import type { CameraProfile } from '../contracts/types'
 
 export interface CameraTarget {
   /** Punkt, um den die Kamera kreist (Kopfhoehe, nicht Fussposition). */
@@ -10,6 +11,11 @@ export interface CameraTarget {
   maxPitch: number
   height: number
 }
+
+/** Rest der Rollbewegung, den die Kamera bei roll_compensation noch mitnimmt. */
+const RESIDUAL_ROLL = 0.15
+/** Zeitkonstante der Horizontdaempfung (cam_vehicle_water) in 1/s. */
+const HORIZON_DAMPING = 1.6
 
 const ON_FOOT: CameraTarget = {
   position: new THREE.Vector3(),
@@ -35,6 +41,13 @@ export class OrbitCameraRig {
   private distance = ON_FOOT.distance
   private targetDistance = ON_FOOT.distance
   private profileId = 'cam_on_foot'
+  private profile: CameraProfile | null = null
+  /** Rollwinkel des gesteuerten Fahrzeugs, Quelle der roll_compensation. */
+  private vehicleRoll = 0
+  private roll = 0
+  private dampedFocusY = 0
+  private focusSeeded = false
+  private readonly viewDirection = new THREE.Vector3()
   private blendRemaining = 0
   private blendTotal = 0
   private readonly blendFrom = new THREE.Vector3()
@@ -50,6 +63,27 @@ export class OrbitCameraRig {
     return this.profileId
   }
 
+  /** Tatsaechlicher Rollwinkel der Kamera - Nachweis der roll_compensation. */
+  get cameraRoll(): number {
+    return this.roll
+  }
+
+  get horizonDamped(): boolean {
+    return this.profile?.horizon_damping === true
+  }
+
+  get rollCompensated(): boolean {
+    return this.profile?.roll_compensation === true
+  }
+
+  /**
+   * Rollwinkel des gesteuerten Fahrzeugs. Ohne Fahrzeug ist er 0, dann
+   * verhaelt sich die Kamera exakt wie vorher.
+   */
+  setVehicleRoll(roll: number): void {
+    this.vehicleRoll = roll
+  }
+
   /**
    * Wechselt das Kameraprofil. Die Blendzeit wird aus dem Manifest gelesen
    * (Mitte des erlaubten Bereichs), damit Boarding-Kameras vertragskonform blenden.
@@ -57,12 +91,14 @@ export class OrbitCameraRig {
   blendTo(profileId: string, fallbackSeconds = 0.4): void {
     if (this.profileId === profileId) return
     this.profileId = profileId
+    // cam_on_foot steht nicht im Fahrzeugmanifest - dort gibt es kein Profil.
+    this.profile = profileId === 'cam_on_foot' ? null : cameraProfile(profileId)
+    // Die Horizontdaempfung startet beim aktuellen Blickpunkt, sonst zieht die
+    // Kamera beim Profilwechsel einmal quer durch das Bild.
+    this.focusSeeded = false
     let seconds = fallbackSeconds
-    if (profileId !== 'cam_on_foot') {
-      const profile = cameraProfile(profileId)
-      const range = profile.blend_seconds_range
-      if (range) seconds = (range[0] + range[1]) / 2
-    }
+    const range = this.profile?.blend_seconds_range
+    if (range) seconds = (range[0] + range[1]) / 2
     if (this.reducedMotion) seconds = 0
     this.blendTotal = seconds
     this.blendRemaining = seconds
@@ -89,7 +125,19 @@ export class OrbitCameraRig {
   }
 
   update(delta: number, target: THREE.Vector3, height = ON_FOOT.height): void {
-    this.focus.set(target.x, target.y + height, target.z)
+    const focusY = target.y + height
+    if (!this.focusSeeded) {
+      this.dampedFocusY = focusY
+      this.focusSeeded = true
+    }
+    // horizon_damping (cam_vehicle_water): Wellengang und Tauchfahrt sollen den
+    // Blickpunkt nicht mitnicken lassen - der Horizont bleibt ruhig.
+    if (this.horizonDamped && !this.reducedMotion) {
+      this.dampedFocusY += (focusY - this.dampedFocusY) * Math.min(1, delta * HORIZON_DAMPING)
+    } else {
+      this.dampedFocusY = focusY
+    }
+    this.focus.set(target.x, this.dampedFocusY, target.z)
     this.distance += (this.targetDistance - this.distance) * Math.min(1, delta * 6)
 
     const cosPitch = Math.cos(this.pitch)
@@ -121,6 +169,20 @@ export class OrbitCameraRig {
       this.camera.position.lerpVectors(this.blendFrom, this.smoothed, eased)
     } else {
       this.camera.position.copy(this.smoothed)
+    }
+
+    // roll_compensation (cam_vehicle_air): die Kamera nimmt die Rollbewegung des
+    // Flugzeugs nur als Rest mit, statt den Horizont mitzukippen. Ohne die
+    // Eigenschaft folgt sie ihr ganz; ohne Fahrzeug bleibt der Winkel 0 und die
+    // Kamera verhaelt sich wie bisher.
+    const targetRoll = this.rollCompensated ? this.vehicleRoll * RESIDUAL_ROLL : this.vehicleRoll
+    this.roll += (targetRoll - this.roll) * (this.reducedMotion ? 1 : Math.min(1, delta * 5))
+    if (Math.abs(this.roll) < 0.0005) {
+      this.roll = 0
+      this.camera.up.set(0, 1, 0)
+    } else {
+      this.viewDirection.copy(this.focus).sub(this.camera.position).normalize()
+      this.camera.up.set(0, 1, 0).applyAxisAngle(this.viewDirection, this.roll)
     }
     this.camera.lookAt(this.focus)
   }

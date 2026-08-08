@@ -269,6 +269,9 @@ export class Game {
         camera: this.rig.activeProfile,
         cameraPosition: this.rig.camera.position.toArray(),
         cameraYaw: this.rig.yaw,
+        cameraRoll: this.rig.cameraRoll,
+        cameraRollCompensated: this.rig.rollCompensated,
+        cameraHorizonDamped: this.rig.horizonDamped,
         gateOpen: !this.gateCollider.enabled,
         puzzleSolved: this.puzzle.isSolved,
         puzzleProgress: this.puzzle.sequenceProgress,
@@ -313,6 +316,7 @@ export class Game {
     const active = this.boarding.vehicle
     const seated = this.boarding.phase === 'seated' && active !== null
     const focus = seated && active ? active.position : this.player.position
+    this.rig.setVehicleRoll(seated && active ? active.roll ?? 0 : 0)
     this.rig.update(delta, focus, seated ? 1.8 : 1.25)
 
     this.hud.drawMinimap(
