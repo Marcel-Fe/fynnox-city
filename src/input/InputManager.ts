@@ -9,6 +9,9 @@ export type VirtualButton =
   | 'sprint'
   | 'enterExit'
   | 'brake'
+  /** Dritte Achse: nur sichtbar, wenn ein Luft- oder Tauchfahrzeug gesteuert wird. */
+  | 'ascend'
+  | 'descend'
 
 /**
  * Touch, Tastatur und Gamepad laufen in dieselben Kanaele.
@@ -125,6 +128,8 @@ export class InputManager {
     this.syncButton(pad.buttons[1]?.pressed ?? false, 'enterExit')
     this.syncButton(pad.buttons[10]?.pressed ?? false, 'sprint')
     this.syncButton(pad.buttons[9]?.pressed ?? false, 'pause')
+    this.syncButton(pad.buttons[7]?.pressed ?? false, 'ascend')
+    this.syncButton(pad.buttons[6]?.pressed ?? false, 'descend')
   }
 
   private readonly padPrevious = new Map<VirtualButton, boolean>()
@@ -201,4 +206,7 @@ const KEY_MAP: Record<string, VirtualButton> = {
   Escape: 'pause',
   KeyM: 'map',
   KeyB: 'brake',
+  // F waere die naheliegende Gegentaste zu R, ist aber schon der Ein-/Ausstieg.
+  KeyR: 'ascend',
+  KeyC: 'descend',
 }

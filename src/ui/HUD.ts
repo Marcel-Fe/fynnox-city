@@ -129,6 +129,8 @@ export class HUD {
         <button class="btn" data-button="scanner" aria-label="PawLink-Scanner"><img alt="" src="${this.icon('action_scan')}"></button>
         <button class="btn" data-button="interact" aria-label="Benutzen"><img alt="" src="${this.icon('action_use')}"></button>
         <button class="btn" data-button="brake" id="btn-brake" aria-label="Bremsen">Bremse</button>
+        <button class="btn hidden" data-button="ascend" id="btn-ascend" aria-label="Steigen">Steigen</button>
+        <button class="btn hidden" data-button="descend" id="btn-descend" aria-label="Sinken">Sinken</button>
         <button class="btn" data-button="jump" aria-label="Springen">Sprung</button>
       </div>
       <div class="state-debug" id="state-debug"></div>
@@ -384,6 +386,9 @@ export class HUD {
     if (brake) brake.classList.toggle('hidden', state !== 'hud_vehicle')
     if (jump) jump.classList.toggle('hidden', state === 'hud_vehicle')
     if (scanner) scanner.classList.toggle('hidden', state === 'hud_vehicle')
+    // Die dritte Achse gehoert zum Fahrzeug, nicht zum Kontext - ausserhalb
+    // von hud_vehicle verschwindet sie in jedem Fall.
+    if (state !== 'hud_vehicle') this.setVerticalControls(null)
     if (enter && state === 'hud_vehicle') {
       enter.classList.remove('hidden')
       enter.querySelector('span')!.textContent = 'Aussteigen'
@@ -399,6 +404,27 @@ export class HUD {
     ;(enter.querySelector('img') as HTMLImageElement).src = this.icon(
       seated ? 'action_exit_vehicle' : 'action_enter_vehicle',
     )
+  }
+
+  /**
+   * Kontextknoepfe fuer Hoehe und Tiefe. Nur Luft- und Tauchfahrzeuge liefern
+   * Beschriftungen; alle anderen bekommen die Knoepfe gar nicht erst zu sehen.
+   */
+  setVerticalControls(labels: { up: string; down: string } | null): void {
+    for (const [name, text] of [
+      ['ascend', labels?.up],
+      ['descend', labels?.down],
+    ] as const) {
+      const button = this.buttons.get(name)
+      if (!button) continue
+      button.classList.toggle('hidden', !text)
+      if (text) {
+        button.textContent = text
+        button.setAttribute('aria-label', text)
+      } else {
+        this.input.release(name)
+      }
+    }
   }
 
   showDialogue(speaker: string, text: string, position: number, total: number): void {

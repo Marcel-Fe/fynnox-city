@@ -394,6 +394,10 @@ export class Game {
     const assist = this.hud.settings.driveAssist
     const throttle = this.input.move.y
     const steer = this.input.move.x * (assist ? 0.75 : 1)
+    // Dritte Achse ueber zwei Kontextknoepfe statt eines zweiten Sticks -
+    // auf Touch waere ein zweiter Stick neben der Kamera nicht bedienbar.
+    const vertical = (this.input.isHeld('ascend') ? 1 : 0) - (this.input.isHeld('descend') ? 1 : 0)
+    active.setVerticalInput?.(vertical)
     active.drive(delta, throttle, steer, this.input.isHeld('brake'))
     for (const vehicle of this.vehicles) {
       if (vehicle !== active) vehicle.settle(delta)
@@ -619,8 +623,10 @@ export class Game {
   }
 
   private updateVehiclePrompt(): void {
+    const active = this.boarding.vehicle
     const seated = this.boarding.phase === 'seated'
     this.hud.setVehiclePrompt(this.boarding.nearestBoardable() !== null, seated)
+    this.hud.setVerticalControls(seated ? active?.verticalLabels ?? null : null)
   }
 
   private markers(): MapMarker[] {
