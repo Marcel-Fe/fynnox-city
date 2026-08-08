@@ -10,6 +10,7 @@ import { InputManager } from '../input/InputManager'
 import { CitySpark } from '../vehicle/CitySpark'
 import { BluefinWaterTaxi } from '../vehicle/BluefinWaterTaxi'
 import { Skyfin } from '../vehicle/Skyfin'
+import { BluefinScout } from '../vehicle/BluefinScout'
 import { BoardingController } from '../vehicle/BoardingController'
 import type { BoardableVehicle } from '../vehicle/BoardableVehicle'
 import { DialoguePartner, DialogueSystem } from '../dialogue/DialogueSystem'
@@ -54,6 +55,7 @@ export class Game {
   private readonly vehicle: CitySpark
   private readonly waterTaxi: BluefinWaterTaxi
   private readonly skyfin: Skyfin
+  private readonly scout: BluefinScout
   private readonly vehicles: BoardableVehicle[]
   private readonly boarding: BoardingController
   private readonly dialogue: DialogueSystem
@@ -104,7 +106,9 @@ export class Game {
     this.waterTaxi.place(this.anchors.waterTaxiStart.position, this.anchors.waterTaxiStart.heading)
     this.skyfin = new Skyfin(this.collision, this.scene, this.anchors.skyfinDocks)
     this.skyfin.place(this.anchors.skyfinStart.position, this.anchors.skyfinStart.heading)
-    this.vehicles = [this.vehicle, this.waterTaxi, this.skyfin]
+    this.scout = new BluefinScout(this.collision, this.scene, this.anchors.scoutDocks)
+    this.scout.place(this.anchors.scoutStart.position, this.anchors.scoutStart.heading)
+    this.vehicles = [this.vehicle, this.waterTaxi, this.skyfin, this.scout]
 
     this.hud = new HUD(container, this.input, {
       onSettingsChanged: (settings) => this.applySettings(settings),
@@ -224,6 +228,8 @@ export class Game {
         this.waterTaxi.place(new THREE.Vector3(x, y, z), heading),
       placeSkyfin: (x: number, y: number, z: number, heading: number) =>
         this.skyfin.place(new THREE.Vector3(x, y, z), heading),
+      placeScout: (x: number, y: number, z: number, heading: number) =>
+        this.scout.place(new THREE.Vector3(x, y, z), heading),
       press: (button: string) => this.input.press(button as never),
       release: (button: string) => this.input.release(button as never),
       setStick: (x: number, y: number) => this.input.setStick(x, y),
@@ -246,6 +252,11 @@ export class Game {
         skyfinAirborne: this.skyfin.isAirborne,
         skyfinPropeller: this.skyfin.propellerRate,
         skyfinRoll: this.skyfin.roll,
+        scout: this.scout.position.toArray(),
+        scoutDocked: this.scout.dockedAt?.id ?? null,
+        scoutDepth: this.scout.depth,
+        scoutSurfaced: this.scout.isSurfaced,
+        scoutHatchLocked: this.scout.hatchLocked,
         activeVehicle: this.boarding.vehicle?.id ?? null,
         harborTask: this.harborTask,
         dialogue: this.dialogue.isActive,
@@ -617,6 +628,7 @@ export class Game {
       { x: this.vehicle.position.x, z: this.vehicle.position.z, color: '#F2B441', shape: 'square' },
       { x: this.waterTaxi.position.x, z: this.waterTaxi.position.z, color: '#9FD8E0', shape: 'square' },
       { x: this.skyfin.position.x, z: this.skyfin.position.z, color: '#F3E3C8', shape: 'triangle' },
+      { x: this.scout.position.x, z: this.scout.position.z, color: '#18BFD0', shape: 'square' },
       {
         x: this.anchors.stationCityProject.x,
         z: this.anchors.stationCityProject.z,
@@ -704,6 +716,12 @@ export class Game {
         z: this.skyfin.position.z,
         heading: this.skyfin.heading,
       },
+      scout_transform: {
+        x: this.scout.position.x,
+        y: this.scout.position.y,
+        z: this.scout.position.z,
+        heading: this.scout.heading,
+      },
       harbor_task: this.harborTask,
       door_or_hatch_state: (this.boarding.vehicle ?? this.vehicle).entryPartState,
       active_input_context: inputContext.is('ctx_menu') ? this.contextBeforeMenu : inputContext.active,
@@ -754,6 +772,12 @@ export class Game {
       this.skyfin.place(
         new THREE.Vector3(data.skyfin_transform.x, data.skyfin_transform.y, data.skyfin_transform.z),
         data.skyfin_transform.heading,
+      )
+    }
+    if (data.scout_transform) {
+      this.scout.place(
+        new THREE.Vector3(data.scout_transform.x, data.scout_transform.y, data.scout_transform.z),
+        data.scout_transform.heading,
       )
     }
     this.harborTask = data.harbor_task ?? 'locked'

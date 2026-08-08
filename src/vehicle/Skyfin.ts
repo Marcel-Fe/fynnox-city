@@ -8,7 +8,9 @@ const WATER_LEVEL = -0.4
 const MAX_ALTITUDE = 45
 /** Ab hier gilt das Flugzeug als in der Luft - darunter liegt es im Wasser. */
 const AIRBORNE_MARGIN = 0.35
-const TAXI_SPEED = 7
+/** Hoechstfahrt auf dem Wasser - muss ueber TAKEOFF_SPEED liegen, sonst
+ *  koennte das Flugzeug seine Startgeschwindigkeit nie erreichen. */
+const TAXI_SPEED = 14
 const AIR_SPEED = 26
 const REVERSE_SPEED = 2
 /** Unter dieser Fahrt traegt der Fluegel nicht - vorher hebt nichts ab. */
