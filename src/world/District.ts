@@ -25,6 +25,12 @@ export interface DistrictAnchors {
   puzzleBeamTarget: THREE.Vector3
   transitGate: THREE.Vector3
   garageImpulse: THREE.Vector3
+  /** Liegeplaetze des Wassertaxis: Rumpfpose, nicht der Anleger selbst. */
+  moorings: { id: string; position: THREE.Vector3; heading: number; label: string }[]
+  waterTaxiStart: { position: THREE.Vector3; heading: number }
+  researchPlatform: THREE.Vector3
+  stationMarineLab: THREE.Vector3
+  mira: THREE.Vector3
   fountain: THREE.Vector3
   projectTerrace: THREE.Vector3
   stationCityProject: THREE.Vector3
@@ -94,6 +100,7 @@ export function buildDistrict(scene: THREE.Scene, collision: CollisionWorld): Di
   buildPromenade(b)
   const lighthouse = buildLighthouse(b)
   buildWaterTaxiStation(b)
+  const platform = buildResearchPlatform(b)
   buildProps(b)
 
   b.finish()
@@ -107,6 +114,25 @@ export function buildDistrict(scene: THREE.Scene, collision: CollisionWorld): Di
     puzzleBeamTarget: puzzle.beamTarget,
     transitGate: puzzle.gate,
     garageImpulse: new THREE.Vector3(-36, 1.2, -20),
+    moorings: [
+      {
+        id: 'mooring_station',
+        position: new THREE.Vector3(15.8, 0, 38),
+        heading: 0,
+        label: 'Wassertaxi-Station',
+      },
+      {
+        id: 'mooring_platform',
+        position: new THREE.Vector3(platform.x - 7.4, 0, platform.z),
+        heading: Math.PI,
+        label: 'Forschungsplattform',
+      },
+    ],
+    waterTaxiStart: { position: new THREE.Vector3(15.8, 0, 38), heading: 0 },
+    researchPlatform: new THREE.Vector3(platform.x, platform.deck, platform.z),
+    // Freie Deckflaeche vor der Messhuette, sonst steckt die Station in der Wand.
+    stationMarineLab: new THREE.Vector3(platform.x - 2.5, platform.deck, platform.z - 4),
+    mira: new THREE.Vector3(11.5, 0.3, 33.5),
     fountain: new THREE.Vector3(10, 0, 18),
     projectTerrace: new THREE.Vector3(-20, 0, 29),
     stationCityProject: new THREE.Vector3(-6, 0, 24),
@@ -494,6 +520,44 @@ function buildWaterTaxiStation(b: WorldBuilder): void {
   b.box({ x, y: -0.45, z: 37.75, w: 8, h: 0.6, d: 7.5, color: COLORS.wood })
   b.railing({ x, z: 41.3, y: 0.15, length: 8, axis: 'x', color: COLORS.metal })
   b.box({ x: x - 3, y: 0.15, z: 36, w: 0.4, h: 1.2, d: 0.4, color: COLORS.coral })
+}
+
+/**
+ * Forschungsplattform im Hafenbecken. Nur ueber das Wassertaxi erreichbar -
+ * damit hat das zweite Fahrzeug ein echtes Ziel und keinen Selbstzweck.
+ */
+function buildResearchPlatform(b: WorldBuilder): { x: number; z: number; deck: number } {
+  const x = 34
+  const z = 62
+  const deck = 0.6
+
+  // Stelzen bis auf den Beckenboden.
+  for (const [dx, dz] of [
+    [-5, -5],
+    [5, -5],
+    [-5, 5],
+    [5, 5],
+  ]) {
+    b.box({ x: x + dx, y: -3, z: z + dz, w: 0.6, h: 3.6, d: 0.6, color: COLORS.metal, collide: false })
+  }
+  b.box({ x, y: deck - 0.3, z, w: 12, h: 0.3, d: 12, color: COLORS.wood })
+  b.railing({ x, z: z + 5.9, y: deck, length: 12, axis: 'x', color: COLORS.metal })
+  b.railing({ x, z: z - 5.9, y: deck, length: 12, axis: 'x', color: COLORS.metal })
+  b.railing({ x: x + 5.9, z, y: deck, length: 12, axis: 'z', color: COLORS.metal })
+  // Backbordseite bleibt offen: dort legt das Wassertaxi an.
+  b.railing({ x: x - 5.9, z: z + 4, y: deck, length: 3.6, axis: 'z', color: COLORS.metal })
+  b.railing({ x: x - 5.9, z: z - 4, y: deck, length: 3.6, axis: 'z', color: COLORS.metal })
+
+  // Messhuette und Sonarmast.
+  b.box({ x: x + 3, y: deck, z: z - 3, w: 4, h: 2.8, d: 4, color: COLORS.cream })
+  b.box({ x: x + 3, y: deck + 2.8, z: z - 3, w: 4.4, h: 0.3, d: 4.4, color: COLORS.roof })
+  b.box({ x: x - 2, y: deck, z: z + 3, w: 0.3, h: 6, d: 0.3, color: COLORS.metal, collide: false })
+  b.box({ x: x - 2, y: deck + 6, z: z + 3, w: 1.6, h: 0.2, d: 1.6, color: COLORS.cyan, collide: false })
+  // Kisten mit Forschungsproben.
+  b.box({ x: x - 3.5, y: deck, z: z - 2, w: 1.2, h: 0.8, d: 1.2, color: COLORS.gold })
+  b.box({ x: x - 3.5, y: deck + 0.8, z: z - 2, w: 0.9, h: 0.6, d: 0.9, color: COLORS.coral })
+
+  return { x, z, deck }
 }
 
 function buildProps(b: WorldBuilder): void {

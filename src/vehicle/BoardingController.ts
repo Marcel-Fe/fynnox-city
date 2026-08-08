@@ -5,7 +5,7 @@ import { inputContext } from '../state/InputContext'
 import type { CollisionWorld } from '../core/CollisionWorld'
 import type { OrbitCameraRig } from '../camera/OrbitCameraRig'
 import type { PlayerController } from '../player/PlayerController'
-import type { CitySpark } from './CitySpark'
+import { resolveSockets, type BoardableVehicle } from './BoardableVehicle'
 
 export type BoardingPhase = 'on_foot' | 'entering' | 'seated' | 'exiting'
 
@@ -20,48 +20,64 @@ const PLAYER_HALF = new THREE.Vector3(0.3, 0.75, 0.3)
 
 /**
  * Setzt die Ein- und Ausstiegsketten aus FAHRZEUG_INTERAKTIONSMANIFEST_v1_6.json
- * Schritt fuer Schritt um. Die Reihenfolge wird nicht nachgebaut, sondern aus
- * dem Manifest gelesen - weicht das Manifest ab, weicht der Ablauf mit ab.
+ * Schritt fuer Schritt um - fuer jedes Fahrzeug im Manifest, nicht nur fuer eines.
+ * Die Reihenfolge wird gelesen, nicht nachgebaut: weicht das Manifest ab,
+ * weicht der Ablauf mit ab.
  */
 export class BoardingController {
   phase: BoardingPhase = 'on_foot'
   currentState: EntryState | ExitState | 'on_foot' = 'on_foot'
   lastDenial: string | null = null
+  private active: BoardableVehicle | null = null
   private queue: Step[] = []
   private stepTime = 0
   private readonly from = new THREE.Vector3()
   private readonly to = new THREE.Vector3()
-  private readonly seatOffset = new THREE.Vector3(0, -0.45, 0)
   private headingFrom = 0
   private headingTo = 0
 
   constructor(
     private readonly player: PlayerController,
-    private readonly vehicle: CitySpark,
+    private readonly vehicles: BoardableVehicle[],
     private readonly rig: OrbitCameraRig,
     private readonly collision: CollisionWorld,
     private readonly onEvent: (message: string) => void,
   ) {}
 
-  get spec() {
-    return vehicleSpec(this.vehicle.id)
+  get vehicle(): BoardableVehicle | null {
+    return this.active
   }
 
-  /** Reichweite fuer den Kontext-Prompt "Einsteigen". */
-  canRequestEnter(): boolean {
-    if (this.phase !== 'on_foot') return false
-    const entry = this.vehicle.socketWorld('entry_driver')
-    return this.player.position.distanceTo(entry) < 2.6
+  /** Naechstes einsteigbares Fahrzeug in Reichweite - Basis des HUD-Prompts. */
+  nearestBoardable(): BoardableVehicle | null {
+    if (this.phase !== 'on_foot') return null
+    let best: BoardableVehicle | null = null
+    let bestDistance = 2.8
+    for (const vehicle of this.vehicles) {
+      const entry = vehicle.socketWorld(resolveSockets(vehicle.id).entry)
+      const distance = this.player.position.distanceTo(entry)
+      if (distance < bestDistance) {
+        best = vehicle
+        bestDistance = distance
+      }
+    }
+    return best
   }
 
   requestEnter(): boolean {
-    if (!this.canRequestEnter()) return false
+    const vehicle = this.nearestBoardable()
+    if (!vehicle) return false
+
+    const spec = vehicleSpec(vehicle.id)
+    const sockets = resolveSockets(vehicle.id)
+    const contract = vehicleContract.global_contract
+
     this.lastDenial = null
+    this.active = vehicle
     this.phase = 'entering'
 
-    const contract = vehicleContract.global_contract
-    const entryAnchor = this.vehicle.socketWorld('entry_driver')
-    const seat = this.vehicle.socketWorld('seat_driver')
+    const entryAnchor = vehicle.socketWorld(sockets.entry)
+    const seat = vehicle.socketWorld(sockets.seat)
 
     const handlers: Partial<Record<EntryState, Step>> = {
       entry_requested: { state: 'entry_requested', seconds: 0 },
@@ -69,9 +85,14 @@ export class BoardingController {
         state: 'entry_validated',
         seconds: 0,
         enter: () => {
-          // entry_requires_stationary aus dem Manifest.
-          if (this.spec.entry_requires_stationary && !this.vehicle.isStationary) {
-            this.deny('Fahrzeug muss stehen')
+          if (spec.entry_requires_stationary && !vehicle.isStationary) {
+            this.deny(`${vehicle.label} muss stehen.`)
+            return
+          }
+          for (const condition of spec.entry_conditions ?? []) {
+            if (vehicle.checkEntryCondition(condition)) continue
+            this.deny(DENIAL_TEXT[condition] ?? `Bedingung ${condition} nicht erfuellt.`)
+            return
           }
         },
       },
@@ -85,24 +106,24 @@ export class BoardingController {
           this.to.y = this.groundAt(this.to)
           this.headingFrom = this.player.heading
           this.headingTo = Math.atan2(
-            this.vehicle.position.x - this.to.x,
-            this.vehicle.position.z - this.to.z,
+            vehicle.position.x - this.to.x,
+            vehicle.position.z - this.to.z,
           )
         },
         during: (t) => this.lerpPlayer(t),
       },
       camera_boarding_blend: {
         state: 'camera_boarding_blend',
-        seconds: this.blendSeconds(this.spec.boarding_camera),
+        seconds: this.blendSeconds(spec.boarding_camera),
         enter: () => {
-          this.rig.blendTo(this.spec.boarding_camera)
-          this.rig.setDistance(4.2)
+          this.rig.blendTo(spec.boarding_camera)
+          this.rig.setDistance(4.6)
         },
       },
       open_entry_part: {
         state: 'open_entry_part',
         seconds: 0.4,
-        enter: () => this.vehicle.setDoorOpen(true),
+        enter: () => vehicle.setEntryPartOpen(true),
       },
       attach_contact_ik: {
         state: 'attach_contact_ik',
@@ -111,13 +132,13 @@ export class BoardingController {
       },
       root_motion_to_seat: {
         state: 'root_motion_to_seat',
-        seconds: 0.5,
+        seconds: 0.55,
         enter: () => {
           this.player.model.setState('fox_enter_vehicle')
           this.from.copy(this.player.position)
-          this.to.copy(seat).add(this.seatOffset)
+          this.to.copy(seat).add(vehicle.seatOffset)
           this.headingFrom = this.player.heading
-          this.headingTo = this.vehicle.heading
+          this.headingTo = vehicle.heading
         },
         during: (t) => this.lerpPlayer(t),
       },
@@ -125,7 +146,7 @@ export class BoardingController {
         state: 'bind_to_seat',
         seconds: 0.1,
         enter: () => {
-          this.vehicle.setDoorOpen(false)
+          vehicle.setEntryPartOpen(false)
           this.player.model.setState('fox_drive_vehicle')
         },
       },
@@ -139,9 +160,9 @@ export class BoardingController {
         seconds: 0,
         enter: () => {
           this.phase = 'seated'
-          this.rig.blendTo(this.spec.control_camera)
-          this.rig.setDistance(7.5)
-          this.onEvent('City Spark bereit - Gas geben mit dem Stick.')
+          this.rig.blendTo(spec.control_camera)
+          this.rig.setDistance(vehicle.id === 'vehicle_bluefin_water_taxi' ? 10 : 7.5)
+          this.onEvent(`${vehicle.label} bereit.`)
         },
       },
     }
@@ -158,21 +179,24 @@ export class BoardingController {
   }
 
   requestExit(): boolean {
-    if (this.phase !== 'seated') return false
+    const vehicle = this.active
+    if (this.phase !== 'seated' || !vehicle) return false
+
     const contract = vehicleContract.global_contract
     const policy = contract.safe_exit_policy
+    const sockets = resolveSockets(vehicle.id)
 
     // find_safe_exit: Kapselsweep an Primaer-, dann Alternativanker.
-    const candidates = policy.prefer_primary_exit
-      ? ['exit_driver_primary', 'exit_driver_alt']
-      : ['exit_driver_alt', 'exit_driver_primary']
-    if (!policy.use_alternate_exit_when_blocked) candidates.length = 1
+    const candidates = policy.use_alternate_exit_when_blocked ? sockets.exits : sockets.exits.slice(0, 1)
     let chosen: THREE.Vector3 | null = null
     let chosenName = ''
     for (const name of candidates) {
-      if (!this.vehicle.sockets.has(name)) continue
-      const anchor = this.vehicle.socketWorld(name)
-      anchor.y = this.groundAt(anchor)
+      if (!vehicle.hasSocket(name)) continue
+      const anchor = vehicle.socketWorld(name)
+      const ground = this.groundAt(anchor)
+      // Ohne tragfaehigen Boden kein Ausstieg - sonst faellt Fynnox ins Wasser.
+      if (ground < anchor.y - 2.2) continue
+      anchor.y = ground
       if (this.isAnchorFree(anchor)) {
         chosen = anchor
         chosenName = name
@@ -182,7 +206,10 @@ export class BoardingController {
 
     if (!chosen) {
       // deny_exit_when_all_anchors_blocked: niemals durch Geometrie teleportieren.
-      this.lastDenial = 'Ausstieg blockiert - Fahrzeug etwas weiter weg abstellen.'
+      this.lastDenial =
+        vehicle.id === 'vehicle_bluefin_water_taxi'
+          ? 'Kein Anleger in Reichweite - langsam an eine Anlegestelle heranfahren.'
+          : 'Ausstieg blockiert - Fahrzeug etwas weiter weg abstellen.'
       this.onEvent(this.lastDenial)
       return false
     }
@@ -202,25 +229,25 @@ export class BoardingController {
         state: 'stop_vehicle_control',
         seconds: 0.15,
         enter: () => {
-          this.vehicle.speed = 0
+          vehicle.speed = 0
         },
       },
       open_entry_part: {
         state: 'open_entry_part',
         seconds: 0.4,
-        enter: () => this.vehicle.setDoorOpen(true),
+        enter: () => vehicle.setEntryPartOpen(true),
       },
       root_motion_to_exit: {
         state: 'root_motion_to_exit',
-        seconds: 0.5,
+        seconds: 0.55,
         enter: () => {
           this.player.model.setState('fox_enter_vehicle')
           this.from.copy(this.player.position)
           this.to.copy(exitAnchor)
           this.headingFrom = this.player.heading
           this.headingTo = Math.atan2(
-            exitAnchor.x - this.vehicle.position.x,
-            exitAnchor.z - this.vehicle.position.z,
+            exitAnchor.x - vehicle.position.x,
+            exitAnchor.z - vehicle.position.z,
           )
         },
         during: (t) => this.lerpPlayer(t),
@@ -229,7 +256,7 @@ export class BoardingController {
         state: 'unbind_from_seat',
         seconds: 0.1,
         enter: () => {
-          this.vehicle.setDoorOpen(false)
+          vehicle.setEntryPartOpen(false)
           this.player.teleport(exitAnchor, this.headingTo)
         },
       },
@@ -251,6 +278,7 @@ export class BoardingController {
         seconds: 0,
         enter: () => {
           this.phase = 'on_foot'
+          this.active = null
           this.player.controlEnabled = true
           this.player.model.setState('fox_idle')
         },
@@ -291,7 +319,7 @@ export class BoardingController {
     if (!step) return
     this.currentState = step.state
     step.enter?.()
-    if (step.seconds === 0) {
+    if (this.queue[0] === step && step.seconds === 0) {
       this.queue.shift()
       this.beginStep()
     }
@@ -303,6 +331,7 @@ export class BoardingController {
     this.queue = []
     this.phase = 'on_foot'
     this.currentState = 'on_foot'
+    this.active = null
     this.player.controlEnabled = true
   }
 
@@ -325,23 +354,31 @@ export class BoardingController {
   }
 
   private bindPlayerToSeat(): void {
-    const seat = this.vehicle.socketWorld('seat_driver')
-    this.player.position.copy(seat).add(this.seatOffset)
-    this.player.heading = this.vehicle.heading
+    const vehicle = this.active
+    if (!vehicle) return
+    const seat = vehicle.socketWorld(resolveSockets(vehicle.id).seat)
+    this.player.position.copy(seat).add(vehicle.seatOffset)
+    this.player.heading = vehicle.heading
     this.player.model.root.position.copy(this.player.position)
-    this.player.model.root.rotation.y = this.vehicle.heading
+    this.player.model.root.rotation.y = vehicle.heading
   }
 
   private groundAt(point: THREE.Vector3): number {
     const ground = this.collision.groundHeightAt(point.x, point.z, point.y + 1.2, 0.3, 'vehicle')
-    return ground > -100 ? ground : point.y
+    return ground > -100 ? ground : point.y - 100
   }
 
   private isAnchorFree(anchor: THREE.Vector3): boolean {
     const box = new THREE.Box3(
-      new THREE.Vector3(anchor.x - PLAYER_HALF.x, anchor.y + 0.05, anchor.z - PLAYER_HALF.z),
+      new THREE.Vector3(anchor.x - PLAYER_HALF.x, anchor.y + 0.1, anchor.z - PLAYER_HALF.z),
       new THREE.Vector3(anchor.x + PLAYER_HALF.x, anchor.y + PLAYER_HALF.y * 2, anchor.z + PLAYER_HALF.z),
     )
     return this.collision.isFree(box)
   }
+}
+
+const DENIAL_TEXT: Record<string, string> = {
+  vehicle_docked: 'Das Boot liegt nicht am Anleger.',
+  ramp_deployed: 'Die Rampe ist noch nicht ausgefahren.',
+  boarding_lane_clear: 'Der Einstieg ist versperrt.',
 }

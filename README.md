@@ -29,6 +29,7 @@ Rigs und Animationsclips ersetzen die Blöcke später, ohne dass die Systeme sic
 | Benutzen | E | Hand-Symbol |
 | PawLink-Scanner | Q | Scanner-Symbol |
 | Ein-/Aussteigen | F | Fahrzeug-Knopf |
+| Dialog weiter | E | Weiter-Knopf |
 | Pause und Einstellungen | Esc | Pause-Symbol |
 | Bremsen (im Fahrzeug) | B | Bremse |
 
@@ -44,9 +45,21 @@ Gamepad wird ebenfalls unterstützt (linker Stick laufen, rechter Stick Kamera, 
   an Kanten von 0,45–1,4 m. Freie Orbit-Kamera mit Kollisionsausweichen.
 - **Dachroute** – Container → Markise → zwei Balkone → Dach → Dachbrücke → 2-m-Sprung,
   plus barrierearmer Treppenturm auf dasselbe Dach.
-- **City Spark** – vollständige 10-Schritt-Einstiegs- und 9-Schritt-Ausstiegskette aus
-  `FAHRZEUG_INTERAKTIONSMANIFEST_v1_6.json`, inklusive Capsule-Sweep-Safe-Exit:
-  primärer Anker → alternativer Anker → begründete Verweigerung. Kein Teleport.
+- **Fahrzeuge** – zwei Fahrzeuge auf derselben Kette: **City Spark** (Land) und
+  **Bluefin Wassertaxi** (Wasser). Die 10-Schritt-Einstiegs- und 9-Schritt-Ausstiegskette
+  wird aus `FAHRZEUG_INTERAKTIONSMANIFEST_v1_6.json` gelesen, nicht nachgebaut; die
+  Sockets ergeben sich aus `required_sockets`, nicht aus fest verdrahteten Namen.
+  Capsule-Sweep-Safe-Exit: primärer Anker → alternativer Anker → begründete Verweigerung.
+  Kein Teleport, und ohne tragfähigen Boden kein Ausstieg – auf offener See bleibt Fynnox
+  an Bord.
+- **Anleger** – das Wassertaxi erfüllt die `entry_conditions` des Manifests
+  (`vehicle_docked`, `ramp_deployed`, `boarding_lane_clear`): langsam heranfahren, das
+  Boot legt an, die Rampe fährt aus, erst dann geht die Klappe auf.
+- **Dialog** – Mira an der Wassertaxi-Station nutzt `ctx_dialogue`. Das Gespräch pausiert
+  ausschließlich die Steuerung; Wasser, NPCs, Verkehr und Boote laufen sichtbar weiter –
+  so verlangt es der Handoff ausdrücklich.
+- **Hafenauftrag** – Mira briefen, mit dem Bluefin zur Forschungsplattform fahren, Probe
+  am `station_marine_lab` auswerten, zurückmelden. Belohnung ist ein fester Betrag.
 - **Mission „Der vierte Weg"** – Impuls scannen, frei zum Hafen reisen, Licht-/Ventil-
   Rätsel lösen, Hafenbrunnen reaktivieren, Wartungstreppe öffnen.
 - **Sammeln** – neun Stadtfunken, Tatz-Taler, Einlösen an der Projektstation.
@@ -92,6 +105,12 @@ Deployment läuft automatisch über `.github/workflows/deploy.yml` bei jedem Pus
 
 ## Nicht im Slice
 
-Skyfin, Bluefin Scout, U-Boot-Expedition, Rivalen-Verfolgungen, Straßenbahnbetrieb,
-Dialogsystem und Store-Uploads fehlen bewusst – die Umsetzungsreihenfolge in
-`SPIELVISION_OPEN_CITY_ABENTEUER_v1_6.md` sieht sie erst nach dem Slice vor.
+Skyfin, Bluefin Scout, U-Boot-Expedition, Rivalen-Verfolgungen, Straßenbahnbetrieb und
+Store-Uploads fehlen bewusst – die Umsetzungsreihenfolge in
+`SPIELVISION_OPEN_CITY_ABENTEUER_v1_6.md` sieht sie erst nach dem Slice vor
+(Punkt 9: „erst danach").
+
+Die Reihenfolge ist bis Punkt 8 abgearbeitet: Gebäudeblock mit freier Kamera, Bewegung
+und PawLink, City Spark, Dachroute und Transit-Lichträtsel, Sammel-/Wallet-/Savegame-
+Schleife, Hafen mit laufender Ambient-Simulation, Bluefin-Wassertaxi-Boarding und der
+gespeicherte Weltzustand vor/nach dem Hafenprojekt.

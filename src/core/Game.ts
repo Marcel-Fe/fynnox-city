@@ -8,7 +8,10 @@ import { PlayerController } from '../player/PlayerController'
 import { OrbitCameraRig } from '../camera/OrbitCameraRig'
 import { InputManager } from '../input/InputManager'
 import { CitySpark } from '../vehicle/CitySpark'
+import { BluefinWaterTaxi } from '../vehicle/BluefinWaterTaxi'
 import { BoardingController } from '../vehicle/BoardingController'
+import type { BoardableVehicle } from '../vehicle/BoardableVehicle'
+import { DialoguePartner, DialogueSystem } from '../dialogue/DialogueSystem'
 import { CollectionSystem } from '../collect/CollectionSystem'
 import { ScannerPuzzle } from '../mission/ScannerPuzzle'
 import { HarborProject } from '../mission/HarborProject'
@@ -18,10 +21,15 @@ import { AmbientNPCSystem } from '../npc/AmbientNPCSystem'
 import { HUD, DEFAULT_SETTINGS, type MapMarker, type Settings } from '../ui/HUD'
 import { SaveGame, type SaveData } from '../save/SaveGame'
 import { inputContext } from '../state/InputContext'
+import { resolveSockets } from '../vehicle/BoardableVehicle'
 import { manifestSummary } from '../contracts/manifests'
 import type { InputContextId, UiActionId } from '../contracts/types'
 
 const PROJECT_STAGE_COST = 15
+const RESEARCH_REWARD = 20
+
+/** Nebenauftrag am Hafen - ohne ihn bliebe das Wassertaxi Kulisse. */
+export type HarborTask = 'locked' | 'briefed' | 'sampled' | 'reported'
 
 interface Interactable {
   action: UiActionId
@@ -43,7 +51,12 @@ export class Game {
   private readonly rig: OrbitCameraRig
   private readonly player: PlayerController
   private readonly vehicle: CitySpark
+  private readonly waterTaxi: BluefinWaterTaxi
+  private readonly vehicles: BoardableVehicle[]
   private readonly boarding: BoardingController
+  private readonly dialogue: DialogueSystem
+  private readonly mira: DialoguePartner
+  private harborTask: HarborTask = 'locked'
   private readonly collectibles: CollectionSystem
   private readonly puzzle: ScannerPuzzle
   private readonly project: HarborProject
@@ -81,20 +94,42 @@ export class Game {
 
     this.player = new PlayerController(this.collision, this.scene)
     this.player.teleport(this.anchors.playerStart)
+    this.player.onRescued = () => this.hud.toast('Aus dem Hafenbecken geholt - nichts verloren.')
 
     this.vehicle = new CitySpark(this.collision, this.scene)
     this.vehicle.place(this.anchors.vehicleStart.position, this.anchors.vehicleStart.heading)
+    this.waterTaxi = new BluefinWaterTaxi(this.collision, this.scene, this.anchors.moorings)
+    this.waterTaxi.place(this.anchors.waterTaxiStart.position, this.anchors.waterTaxiStart.heading)
+    this.vehicles = [this.vehicle, this.waterTaxi]
 
     this.hud = new HUD(container, this.input, {
       onSettingsChanged: (settings) => this.applySettings(settings),
       onSave: () => this.save(true),
       onReset: () => this.resetProgress(),
       onOnboardingDone: () => this.save(false),
+      onDialogueNext: () => this.dialogue.advance(),
+      onDialogueSkip: () => this.dialogue.cancel(),
     })
+
+    this.dialogue = new DialogueSystem(
+      (line, position, total) => this.hud.showDialogue(line.speaker, line.text, position, total),
+      () => {
+        this.hud.hideDialogue()
+        this.player.controlEnabled = true
+      },
+    )
+    this.mira = new DialoguePartner(
+      this.scene,
+      'npc_mira',
+      'Mira',
+      this.anchors.mira,
+      Math.PI,
+      '#D6693F',
+    )
 
     this.boarding = new BoardingController(
       this.player,
-      this.vehicle,
+      this.vehicles,
       this.rig,
       this.collision,
       (message) => this.hud.toast(message),
@@ -146,6 +181,7 @@ export class Game {
     for (const [position, color] of [
       [this.anchors.stationCityProject, COLORS.gold],
       [this.anchors.stationMakerExchange, COLORS.coral],
+      [this.anchors.stationMarineLab, COLORS.cyan],
     ] as [THREE.Vector3, string][]) {
       const station = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.6, 0.9), mat(color))
       station.position.copy(position).add(new THREE.Vector3(0, 0.95, 0))
@@ -180,6 +216,8 @@ export class Game {
         this.player.teleport(new THREE.Vector3(x, y, z), heading),
       placeVehicle: (x: number, y: number, z: number, heading: number) =>
         this.vehicle.place(new THREE.Vector3(x, y, z), heading),
+      placeWaterTaxi: (x: number, y: number, z: number, heading: number) =>
+        this.waterTaxi.place(new THREE.Vector3(x, y, z), heading),
       press: (button: string) => this.input.press(button as never),
       setStick: (x: number, y: number) => this.input.setStick(x, y),
       addLook: (x: number, y: number) => this.rig.addLook(x, y),
@@ -188,10 +226,18 @@ export class Game {
       },
       save: () => this.save(true),
       closeOnboarding: () => this.hud.closeOnboarding(),
+      talk: () => this.talkToMira(),
+      dialogueNext: () => this.dialogue.advance(),
       state: () => ({
         player: this.player.position.toArray(),
         grounded: this.player.grounded,
         vehicle: this.vehicle.position.toArray(),
+        waterTaxi: this.waterTaxi.position.toArray(),
+        waterTaxiDocked: this.waterTaxi.dockedAt?.id ?? null,
+        activeVehicle: this.boarding.vehicle?.id ?? null,
+        harborTask: this.harborTask,
+        dialogue: this.dialogue.isActive,
+        dialogueSpeaker: this.dialogue.speaker,
         boarding: this.boarding.phase,
         boardingState: this.boarding.currentState,
         denial: this.boarding.lastDenial,
@@ -238,17 +284,25 @@ export class Game {
     this.npcs.update(delta, this.player.position)
     this.puzzle.update(delta)
     this.fountain.update(delta)
-    this.vehicle.update(delta)
+    for (const vehicle of this.vehicles) vehicle.update(delta)
+    this.mira.update(delta, this.player.position)
 
-    const seated = this.boarding.phase === 'seated'
-    const focus = seated ? this.vehicle.position : this.player.position
-    this.rig.update(delta, focus, seated ? 1.6 : 1.25)
+    const active = this.boarding.vehicle
+    const seated = this.boarding.phase === 'seated' && active !== null
+    const focus = seated && active ? active.position : this.player.position
+    this.rig.update(delta, focus, seated ? 1.8 : 1.25)
 
-    this.hud.drawMinimap(focus.x, focus.z, seated ? this.vehicle.heading : this.player.heading, this.markers())
+    this.hud.drawMinimap(
+      focus.x,
+      focus.z,
+      seated && active ? active.heading : this.player.heading,
+      this.markers(),
+    )
     this.hud.setDebug([
       `ctx: ${inputContext.active}  hud: ${inputContext.hudState}`,
       `boarding: ${this.boarding.phase} / ${this.boarding.currentState}`,
-      `cam: ${this.rig.activeProfile}  projekt: ${this.project.stateId}`,
+      `fahrzeug: ${active?.id ?? '-'}  cam: ${this.rig.activeProfile}`,
+      `projekt: ${this.project.stateId}  hafen: ${this.harborTask}`,
       `manifest v${manifestSummary.packageVersions.join(' + v')}`,
     ])
 
@@ -279,11 +333,22 @@ export class Game {
   private updateGameplay(delta: number): void {
     this.boarding.update(delta)
 
+    // Im Gespraech ruht nur die Steuerung - Welt, NPCs und Boote laufen weiter.
+    if (this.dialogue.isActive) {
+      this.player.controlEnabled = false
+      this.player.update(delta, this.input, this.rig)
+      for (const vehicle of this.vehicles) vehicle.settle(delta)
+      if (this.input.consume('interact')) this.dialogue.advance()
+      this.input.consume('enterExit')
+      this.input.consume('scanner')
+      return
+    }
+
     if (this.boarding.phase === 'seated') {
       this.driveVehicle(delta)
     } else if (this.boarding.phase === 'on_foot') {
       this.player.update(delta, this.input, this.rig)
-      this.vehicle.settle(delta)
+      for (const vehicle of this.vehicles) vehicle.settle(delta)
       this.handleScanner()
       this.handleInteractions()
       // Ohne Fahrzeug in Reichweite passiert nichts - keine Fehlermeldung noetig.
@@ -301,11 +366,17 @@ export class Game {
   }
 
   private driveVehicle(delta: number): void {
+    const active = this.boarding.vehicle
+    if (!active) return
     const assist = this.hud.settings.driveAssist
     const throttle = this.input.move.y
     const steer = this.input.move.x * (assist ? 0.75 : 1)
-    this.vehicle.drive(delta, throttle, steer, this.input.isHeld('brake'))
-    this.rig.setDistance(7.5 + Math.min(3, Math.abs(this.vehicle.speed) * 0.25))
+    active.drive(delta, throttle, steer, this.input.isHeld('brake'))
+    for (const vehicle of this.vehicles) {
+      if (vehicle !== active) vehicle.settle(delta)
+    }
+    const base = active.id === 'vehicle_bluefin_water_taxi' ? 10 : 7.5
+    this.rig.setDistance(base + Math.min(3, Math.abs(active.speed) * 0.25))
     if (this.input.consume('enterExit')) this.boarding.requestExit()
   }
 
@@ -375,7 +446,84 @@ export class Game {
       },
     })
 
+    list.push({
+      action: 'action_talk',
+      label: 'Mit Mira sprechen',
+      position: this.anchors.mira,
+      range: 2.8,
+      run: () => this.talkToMira(),
+    })
+
+    if (this.harborTask === 'briefed') {
+      list.push({
+        action: 'action_scan',
+        label: 'Forschungsprobe auswerten',
+        position: this.anchors.stationMarineLab,
+        range: 2.8,
+        run: () => this.useMarineLab(),
+      })
+    }
+
     return list
+  }
+
+  /**
+   * Mira fuehrt durch den Hafenauftrag. Der Dialog nutzt ctx_dialogue,
+   * die Stadt laeuft dabei sichtbar weiter.
+   */
+  private talkToMira(): void {
+    this.player.playAction('fox_wave', 0.6)
+    if (this.harborTask === 'locked') {
+      this.dialogue.start(
+        this.mira,
+        [
+          { speaker: 'Mira', text: 'Da bist du ja. Dein Stadtfunken-Impuls hoert am Kai nicht auf - er laeuft unter Wasser weiter.', face: 'expr_thinking' },
+          { speaker: 'Fynnox', text: 'Also raus aufs Wasser. Hast du zufaellig ein Boot dabei?', face: 'face_smile' },
+          { speaker: 'Mira', text: 'Das Bluefin liegt am Anleger. Fahr zur Forschungsplattform und lass die Probe durch das Marine-Lab laufen.', face: 'face_smile' },
+          { speaker: 'Mira', text: 'Und fahr langsam an den Anleger heran. Die Rampe faehrt erst aus, wenn das Boot wirklich liegt.', face: 'face_neutral' },
+        ],
+        () => {
+          this.harborTask = 'briefed'
+          this.hud.toast('Neuer Auftrag: Forschungsplattform mit dem Bluefin erreichen.')
+          this.save(false)
+        },
+      )
+      return
+    }
+    if (this.harborTask === 'briefed') {
+      this.dialogue.start(this.mira, [
+        { speaker: 'Mira', text: 'Das Bluefin liegt noch am Anleger. Langsam heranfahren, dann faehrt die Rampe aus.', face: 'face_neutral' },
+      ])
+      return
+    }
+    if (this.harborTask === 'sampled') {
+      this.dialogue.start(
+        this.mira,
+        [
+          { speaker: 'Fynnox', text: 'Die Probe ist ausgewertet. Die alte Leitung fuehrt genau unter die TideLine-Kammer.', face: 'expr_excited' },
+          { speaker: 'Mira', text: 'Dann war das kein Zufall. Signal Null benutzt das alte Netz, es baut es nicht neu.', face: 'expr_surprised' },
+          { speaker: 'Mira', text: 'Nimm die Taler fuer die Werkstattkasse. Und behalte den Turm im Auge - da war heute Nacht Licht.', face: 'face_smile' },
+        ],
+        () => {
+          this.harborTask = 'reported'
+          this.collectibles.reward(RESEARCH_REWARD)
+          this.refreshWallet()
+          this.hud.toast(`Forschungsdaten abgegeben - ${RESEARCH_REWARD} Tatz-Taler.`)
+          this.save(true)
+        },
+      )
+      return
+    }
+    this.dialogue.start(this.mira, [
+      { speaker: 'Mira', text: 'Die Werkstatt laeuft. Wenn du wieder etwas Merkwuerdiges findest, weisst du, wo ich bin.', face: 'face_smile' },
+    ])
+  }
+
+  private useMarineLab(): void {
+    this.player.playAction('fox_scan', 0.8)
+    this.harborTask = 'sampled'
+    this.hud.toast('Forschungsprobe ausgewertet - zurueck zu Mira an der Station.')
+    this.save(false)
   }
 
   private handleInteractions(): void {
@@ -449,12 +597,13 @@ export class Game {
 
   private updateVehiclePrompt(): void {
     const seated = this.boarding.phase === 'seated'
-    this.hud.setVehiclePrompt(this.boarding.canRequestEnter(), seated)
+    this.hud.setVehiclePrompt(this.boarding.nearestBoardable() !== null, seated)
   }
 
   private markers(): MapMarker[] {
     const markers: MapMarker[] = [
       { x: this.vehicle.position.x, z: this.vehicle.position.z, color: '#F2B441', shape: 'square' },
+      { x: this.waterTaxi.position.x, z: this.waterTaxi.position.z, color: '#9FD8E0', shape: 'square' },
       {
         x: this.anchors.stationCityProject.x,
         z: this.anchors.stationCityProject.z,
@@ -462,6 +611,17 @@ export class Game {
         shape: 'triangle',
       },
     ]
+    if (this.harborTask === 'briefed') {
+      markers.push({
+        x: this.anchors.stationMarineLab.x,
+        z: this.anchors.stationMarineLab.z,
+        color: '#5CE1F0',
+        shape: 'square',
+      })
+    } else if (this.harborTask === 'sampled' || this.harborTask === 'locked') {
+      markers.push({ x: this.anchors.mira.x, z: this.anchors.mira.z, color: '#D6693F', shape: 'square' })
+    }
+
     const step = this.mission.step
     if (step === 'briefing') {
       markers.push({
@@ -511,15 +671,22 @@ export class Game {
         z: this.player.position.z,
         heading: this.player.heading,
       },
-      vehicle_id: this.boarding.phase === 'seated' ? this.vehicle.id : null,
-      seat_id: this.boarding.phase === 'seated' ? 'seat_driver' : null,
+      vehicle_id: this.boarding.vehicle?.id ?? null,
+      seat_id: this.boarding.vehicle ? resolveSockets(this.boarding.vehicle.id).seat : null,
       vehicle_transform: {
         x: this.vehicle.position.x,
         y: this.vehicle.position.y,
         z: this.vehicle.position.z,
         heading: this.vehicle.heading,
       },
-      door_or_hatch_state: this.vehicle.doorState,
+      water_taxi_transform: {
+        x: this.waterTaxi.position.x,
+        y: this.waterTaxi.position.y,
+        z: this.waterTaxi.position.z,
+        heading: this.waterTaxi.heading,
+      },
+      harbor_task: this.harborTask,
+      door_or_hatch_state: (this.boarding.vehicle ?? this.vehicle).entryPartState,
       active_input_context: inputContext.is('ctx_menu') ? this.contextBeforeMenu : inputContext.active,
       camera_profile: this.rig.activeProfile,
       mission_step: this.mission.step,
@@ -554,6 +721,17 @@ export class Game {
       new THREE.Vector3(data.vehicle_transform.x, data.vehicle_transform.y, data.vehicle_transform.z),
       data.vehicle_transform.heading,
     )
+    if (data.water_taxi_transform) {
+      this.waterTaxi.place(
+        new THREE.Vector3(
+          data.water_taxi_transform.x,
+          data.water_taxi_transform.y,
+          data.water_taxi_transform.z,
+        ),
+        data.water_taxi_transform.heading,
+      )
+    }
+    this.harborTask = data.harbor_task ?? 'locked'
     this.collectibles.restore(data.collectibles, data.wallet)
     this.project.setStage(data.project_stage)
     this.npcs.setProjectActivity(this.project.activityEnabled)

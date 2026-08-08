@@ -197,6 +197,49 @@ canvas.scene {
   color: var(--cyan);
 }
 
+.dialogue {
+  position: absolute;
+  left: 50%;
+  bottom: calc(24px + var(--safe-b));
+  transform: translateX(-50%);
+  width: min(92vw, 660px);
+  display: none;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.dialogue.visible {
+  display: flex;
+}
+
+.dialogue .speaker {
+  color: var(--gold);
+  font-weight: 600;
+  font-size: 0.95em;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.dialogue .speaker small {
+  color: var(--cream);
+  opacity: 0.6;
+  font-weight: 400;
+  font-size: 0.8em;
+}
+
+.dialogue p {
+  margin: 0;
+  line-height: 1.45;
+}
+
+.dialogue .actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
 .stick {
   position: absolute;
   left: calc(28px + var(--safe-l));

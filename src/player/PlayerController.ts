@@ -12,6 +12,7 @@ const HALF = new THREE.Vector3(0.3, 0.75, 0.3)
 const MANTLE_MIN = 0.45
 const MANTLE_MAX = 1.4
 const MANTLE_SECONDS = 0.42
+const FALLBACK_SPAWN = new THREE.Vector3(-26, 0.4, -16)
 
 export class PlayerController {
   readonly model = new FynnoxModel()
@@ -22,7 +23,11 @@ export class PlayerController {
   /** Steuerung pausiert (Dialog, Menue, Boarding) - die Welt laeuft weiter. */
   controlEnabled = true
   visible = true
+  /** Meldung an das HUD, wenn Fynnox aus dem Wasser geholt wurde. */
+  onRescued: (() => void) | null = null
 
+  /** Letzter trockener Stand - Grundlage der Rettung aus dem Hafenbecken. */
+  private readonly lastSafeGround = new THREE.Vector3()
   private mantle: { from: THREE.Vector3; to: THREE.Vector3; time: number } | null = null
   private airTime = 0
   private landTimer = 0
@@ -44,6 +49,7 @@ export class PlayerController {
     this.velocity.set(0, 0, 0)
     this.heading = heading
     this.mantle = null
+    if (position.y > -0.5) this.lastSafeGround.copy(position)
   }
 
   get isMantling(): boolean {
@@ -109,6 +115,7 @@ export class PlayerController {
       this.grounded = true
       this.velocity.y = 0
       this.airTime = 0
+      if (this.position.y > -0.5) this.lastSafeGround.copy(this.position)
     } else {
       this.grounded = false
       this.airTime += delta
@@ -117,7 +124,13 @@ export class PlayerController {
     // Automatisches Aufziehen an niedrigen Kanten, wenn man dagegen laeuft.
     if (this.controlEnabled && result.hitWall && this.wish.lengthSq() > 0.1) this.tryMantle()
 
-    if (this.position.y < -8) this.teleport(new THREE.Vector3(-30, 0.1, -16))
+    // Ins Hafenbecken zu rutschen kostet nur Zeit: Fynnox steht wieder am
+    // letzten trockenen Punkt, nichts geht verloren.
+    if (this.position.y < -1.2) {
+      const rescue = this.lastSafeGround.lengthSq() > 0 ? this.lastSafeGround : FALLBACK_SPAWN
+      this.teleport(rescue.clone(), this.heading)
+      this.onRescued?.()
+    }
 
     this.applyTransform(delta)
     this.selectAnimation(delta)

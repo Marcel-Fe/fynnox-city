@@ -63,6 +63,11 @@ export class CollectionSystem {
     this.wallet = Math.max(0, wallet)
   }
 
+  /** Belohnung aus Auftraegen - fester Betrag, keine Zufallsausschuettung. */
+  reward(amount: number): void {
+    this.wallet += Math.max(0, amount)
+  }
+
   /** Einloesen an einer Station. Gibt false zurueck, statt ins Minus zu gehen. */
   spend(amount: number): boolean {
     if (!safetyInvariants.wallet_never_negative) throw new Error('Wallet-Invariante fehlt')

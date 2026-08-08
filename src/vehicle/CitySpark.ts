@@ -1,7 +1,7 @@
 import * as THREE from 'three'
 import { COLORS, mat } from '../core/Palette'
 import { CollisionWorld, moveAndSlide } from '../core/CollisionWorld'
-import { vehicleSpec } from '../contracts/manifests'
+import { buildSockets, type BoardableVehicle } from './BoardableVehicle'
 
 const HALF = new THREE.Vector3(0.85, 0.85, 1.6)
 const MAX_SPEED = 12
@@ -15,8 +15,10 @@ const DRAG = 1.6
  * Sockets und bewegliche Teile kommen aus FAHRZEUG_INTERAKTIONSMANIFEST_v1_6.json;
  * fehlt ein geforderter Socket, faellt das beim Start auf, nicht im Spiel.
  */
-export class CitySpark {
+export class CitySpark implements BoardableVehicle {
   readonly id = 'vehicle_city_spark'
+  readonly label = 'City Spark'
+  readonly seatOffset = new THREE.Vector3(0, -0.45, 0)
   readonly root = new THREE.Group()
   readonly sockets = new Map<string, THREE.Object3D>()
   readonly position = new THREE.Vector3()
@@ -33,8 +35,6 @@ export class CitySpark {
     private readonly collision: CollisionWorld,
     scene: THREE.Scene,
   ) {
-    const spec = vehicleSpec(this.id)
-
     const chassis = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.5, 3.0), mat(COLORS.sparkBody))
     chassis.position.y = 0.62
     chassis.castShadow = true
@@ -93,7 +93,7 @@ export class CitySpark {
       this.wheels.push(wheel)
     }
 
-    const socketPositions: Record<string, [number, number, number]> = {
+    for (const [name, object] of buildSockets(this.id, this.root, {
       entry_driver: [-1.5, 0, 0.2],
       exit_driver_primary: [-1.7, 0, 0.2],
       exit_driver_alt: [1.7, 0, 0.2],
@@ -106,17 +106,15 @@ export class CitySpark {
       hand_wheel_r: [-0.24, 1.2, -0.45],
       foot_pedal_l: [-0.55, 0.9, -0.75],
       foot_pedal_r: [-0.3, 0.9, -0.75],
-    }
-    for (const socket of spec.required_sockets) {
-      const local = socketPositions[socket]
-      if (!local) throw new Error(`Socket ${socket} aus dem Manifest fehlt am Modell ${this.id}`)
-      const object = new THREE.Object3D()
-      object.position.set(local[0], local[1], local[2])
-      this.root.add(object)
-      this.sockets.set(socket, object)
+    })) {
+      this.sockets.set(name, object)
     }
 
     scene.add(this.root)
+  }
+
+  hasSocket(name: string): boolean {
+    return this.sockets.has(name)
   }
 
   socketWorld(name: string, target = new THREE.Vector3()): THREE.Vector3 {
@@ -124,6 +122,11 @@ export class CitySpark {
     if (!socket) throw new Error(`Socket unbekannt: ${name}`)
     this.root.updateMatrixWorld(true)
     return socket.getWorldPosition(target)
+  }
+
+  /** Der Buggy kennt nur entry_requires_stationary, keine Zusatzbedingungen. */
+  checkEntryCondition(condition: string): boolean {
+    throw new Error(`${this.id} kennt die Bedingung ${condition} nicht`)
   }
 
   place(position: THREE.Vector3, heading: number): void {
@@ -134,11 +137,11 @@ export class CitySpark {
     this.updateCollider()
   }
 
-  setDoorOpen(open: boolean): void {
+  setEntryPartOpen(open: boolean): void {
     this.doorTarget = open ? 1 : 0
   }
 
-  get doorState(): 'open' | 'closed' | 'moving' {
+  get entryPartState(): 'open' | 'closed' | 'moving' {
     if (this.doorOpen > 0.97) return 'open'
     if (this.doorOpen < 0.03) return 'closed'
     return 'moving'

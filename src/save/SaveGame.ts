@@ -17,7 +17,10 @@ export interface SaveData {
   door_or_hatch_state: 'open' | 'closed' | 'moving'
   active_input_context: InputContextId
   camera_profile: string
+  /** Zweites Fahrzeug: eigener Transform, damit der Liegeplatz erhalten bleibt. */
+  water_taxi_transform: { x: number; y: number; z: number; heading: number }
   /** Fortschritt der Slice-Systeme. */
+  harbor_task: 'locked' | 'briefed' | 'sampled' | 'reported'
   mission_step: MissionStep
   puzzle_solved: boolean
   fountain_active: boolean

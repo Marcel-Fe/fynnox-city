@@ -36,6 +36,8 @@ interface HudCallbacks {
   onSave: () => void
   onReset: () => void
   onOnboardingDone: () => void
+  onDialogueNext: () => void
+  onDialogueSkip: () => void
 }
 
 const ONBOARDING_SCREENS = [
@@ -74,6 +76,11 @@ export class HUD {
   private readonly onboardingTitle: HTMLElement
   private readonly onboardingText: HTMLElement
   private readonly onboardingNext: HTMLButtonElement
+  private readonly dialogue: HTMLElement
+  private readonly dialogueSpeaker: HTMLElement
+  private readonly dialogueText: HTMLElement
+  private readonly dialogueProgress: HTMLElement
+  private readonly dialogueNext: HTMLButtonElement
   private readonly minimapCanvas: HTMLCanvasElement
   private readonly minimapContext: CanvasRenderingContext2D
   private onboardingIndex = 0
@@ -107,6 +114,14 @@ export class HUD {
         <img alt="" id="prompt-icon" src="${this.icon('action_use')}">
         <span id="prompt-label">Benutzen</span>
         <span class="key" id="prompt-key">E</span>
+      </div>
+      <div class="dialogue panel" id="dialogue" data-ui>
+        <div class="speaker"><span id="dialogue-speaker">Mira</span><small id="dialogue-progress"></small></div>
+        <p id="dialogue-text"></p>
+        <div class="actions">
+          <button class="action" data-ui id="dialogue-skip">Beenden</button>
+          <button class="action primary" data-ui id="dialogue-next">Weiter</button>
+        </div>
       </div>
       <div class="stick" id="stick" data-ui><div class="knob" id="knob"></div></div>
       <div class="buttons" data-ui>
@@ -164,6 +179,11 @@ export class HUD {
     this.onboardingTitle = this.byId('onboarding-title')
     this.onboardingText = this.byId('onboarding-text')
     this.onboardingNext = this.byId('onboarding-next') as HTMLButtonElement
+    this.dialogue = this.byId('dialogue')
+    this.dialogueSpeaker = this.byId('dialogue-speaker')
+    this.dialogueText = this.byId('dialogue-text')
+    this.dialogueProgress = this.byId('dialogue-progress')
+    this.dialogueNext = this.byId('dialogue-next') as HTMLButtonElement
     this.minimapCanvas = this.root.querySelector('.minimap canvas') as HTMLCanvasElement
     this.minimapContext = this.minimapCanvas.getContext('2d') as CanvasRenderingContext2D
 
@@ -175,6 +195,10 @@ export class HUD {
     window.addEventListener('resize', () => this.enforceTokenMinimums())
 
     this.onboardingNext.addEventListener('click', () => this.nextOnboarding())
+    this.dialogueNext.addEventListener('click', () => this.callbacks.onDialogueNext())
+    ;(this.byId('dialogue-skip') as HTMLButtonElement).addEventListener('click', () =>
+      this.callbacks.onDialogueSkip(),
+    )
     this.pause.addEventListener('click', (event) => {
       const action = (event.target as HTMLElement).closest('[data-action]')?.getAttribute('data-action')
       if (action === 'resume') this.closePause()
@@ -375,6 +399,22 @@ export class HUD {
     ;(enter.querySelector('img') as HTMLImageElement).src = this.icon(
       seated ? 'action_exit_vehicle' : 'action_enter_vehicle',
     )
+  }
+
+  showDialogue(speaker: string, text: string, position: number, total: number): void {
+    this.dialogue.classList.add('visible')
+    this.dialogueSpeaker.textContent = speaker
+    this.dialogueText.textContent = text
+    this.dialogueProgress.textContent = `${position} von ${total}`
+    this.dialogueNext.textContent = position === total ? 'Verstanden' : 'Weiter'
+  }
+
+  hideDialogue(): void {
+    this.dialogue.classList.remove('visible')
+  }
+
+  get isDialogueOpen(): boolean {
+    return this.dialogue.classList.contains('visible')
   }
 
   setMission(title: string, objective: string, hint: string): void {
