@@ -302,10 +302,20 @@ canvas.scene {
   display: none;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  /* Zentriert, solange der Inhalt passt - sonst wuerde "center" den oberen
+     Teil abschneiden, statt ihn scrollbar zu machen. */
+  justify-content: flex-start;
   gap: 14px;
   padding: calc(20px + var(--safe-t)) 20px calc(20px + var(--safe-b));
   overflow-y: auto;
+}
+
+.overlay.visible > *:first-child {
+  margin-top: auto;
+}
+
+.overlay.visible > *:last-child {
+  margin-bottom: auto;
 }
 
 .overlay.visible {
