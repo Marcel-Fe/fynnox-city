@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.vite/
+*.local
+.DS_Store
+Thumbs.db
+
+# Produktionspaket bleibt lokal: 386 MB Referenzbilder sind Produktionsvorlagen,
+# keine Laufzeit-Assets (siehe FYNNOX_CITY_DEVELOPER_HANDOFF_EN.md).
+Fynnox_City_3D_Produktionspaket_v1/
+*.zip

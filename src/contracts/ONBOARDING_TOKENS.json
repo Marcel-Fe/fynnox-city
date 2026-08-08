@@ -1,0 +1,15 @@
+{
+  "schema_version": "1.0",
+  "canvas": {"width": 1080, "height": 1920, "safe_margin": 80},
+  "colors": {"navy": "#071B31", "navy_mid": "#173B54", "cyan": "#18BFD0", "coral": "#FF7A45", "cream": "#FFF8EB", "gold": "#F5C76D"},
+  "minimum_touch_target_px": 88,
+  "minimum_body_text_px": 30,
+  "screens": [
+    {"id": "tutorial_move", "file": "01_Bewegung_Touch.svg", "input_context": "ctx_on_foot"},
+    {"id": "tutorial_collect", "file": "02_Sammeln_Einloesen.svg", "input_context": "ctx_on_foot"},
+    {"id": "tutorial_vehicle", "file": "03_Fahrzeuge.svg", "input_context": "ctx_vehicle"},
+    {"id": "tutorial_rival", "file": "04_Rivalen_Hinweis.svg", "input_context": "ctx_on_foot"},
+    {"id": "settings_accessibility", "file": "05_Barrierefreiheit.svg", "input_context": "ctx_menu"}
+  ],
+  "runtime_rule": "SVGs sind editierbare Layoutreferenzen. Sichtbarer Text wird im Spiel über die Element-IDs lokalisiert und nicht als Rastertext übernommen."
+}

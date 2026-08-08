@@ -1,0 +1,257 @@
+{
+  "schema_version": "1.0",
+  "package_version": "1.6",
+  "project": "Fynnox City",
+  "purpose": "engine_agnostic_vehicle_boarding_contract",
+  "units": {
+    "world_unit_meters": 1.0,
+    "up_axis": "+Y",
+    "model_forward_axis": "-Z"
+  },
+  "global_contract": {
+    "request_action": "action_enter_vehicle",
+    "exit_action": "action_exit_vehicle",
+    "source_context": "ctx_on_foot",
+    "vehicle_context": "ctx_vehicle",
+    "entry_state_sequence": [
+      "entry_requested",
+      "entry_validated",
+      "align_to_entry",
+      "camera_boarding_blend",
+      "open_entry_part",
+      "attach_contact_ik",
+      "root_motion_to_seat",
+      "bind_to_seat",
+      "switch_input_context",
+      "vehicle_control"
+    ],
+    "exit_state_sequence": [
+      "exit_requested",
+      "find_safe_exit",
+      "stop_vehicle_control",
+      "open_entry_part",
+      "root_motion_to_exit",
+      "unbind_from_seat",
+      "switch_input_context",
+      "camera_on_foot_blend",
+      "on_foot"
+    ],
+    "safe_exit_policy": {
+      "validate_with_capsule_sweep": true,
+      "prefer_primary_exit": true,
+      "use_alternate_exit_when_blocked": true,
+      "deny_exit_when_all_anchors_blocked": true,
+      "teleport_player_out": false
+    },
+    "save_atomic_fields": [
+      "player_state",
+      "vehicle_id",
+      "seat_id",
+      "vehicle_transform",
+      "door_or_hatch_state",
+      "active_input_context",
+      "camera_profile"
+    ]
+  },
+  "camera_profiles": [
+    {"id": "cam_board_land", "blend_seconds_range": [0.35, 0.6], "reduced_motion_supported": true},
+    {"id": "cam_board_water", "blend_seconds_range": [0.45, 0.75], "reduced_motion_supported": true},
+    {"id": "cam_board_air", "blend_seconds_range": [0.5, 0.8], "reduced_motion_supported": true},
+    {"id": "cam_vehicle_land", "collision_avoidance": true, "speed_based_distance": true},
+    {"id": "cam_vehicle_water", "collision_avoidance": true, "horizon_damping": true},
+    {"id": "cam_vehicle_air", "collision_avoidance": true, "roll_compensation": true}
+  ],
+  "vehicles": [
+    {
+      "id": "vehicle_city_spark",
+      "type": "electric_buggy",
+      "turnaround": "03_Bildreferenzen/09_Fahrzeuge/01_City_Spark_Elektrobuggy/00_Mehransichten.png",
+      "entry_reference": "03_Bildreferenzen/26_Open_City_Abenteuer/01_Fahrzeug_Einstieg_Ausstieg/02_Buggy_Einsteigen.png",
+      "exit_reference": "03_Bildreferenzen/26_Open_City_Abenteuer/01_Fahrzeug_Einstieg_Ausstieg/03_Buggy_Aussteigen.png",
+      "boarding_camera": "cam_board_land",
+      "control_camera": "cam_vehicle_land",
+      "required_sockets": [
+        "entry_driver",
+        "exit_driver_primary",
+        "exit_driver_alt",
+        "seat_driver",
+        "look_driver",
+        "camera_boarding",
+        "camera_drive",
+        "hand_door",
+        "hand_wheel_l",
+        "hand_wheel_r",
+        "foot_pedal_l",
+        "foot_pedal_r"
+      ],
+      "moving_parts": ["door_driver", "steering_wheel", "wheels", "suspension"],
+      "animation_ids": [
+        "fox_buggy_open_door",
+        "fox_buggy_enter",
+        "fox_buggy_exit",
+        "fox_buggy_close_door",
+        "fox_buggy_drive_idle",
+        "fox_buggy_steer_left",
+        "fox_buggy_steer_right",
+        "fox_buggy_brake"
+      ],
+      "entry_requires_stationary": true
+    },
+    {
+      "id": "vehicle_pawglide",
+      "type": "electric_kick_scooter",
+      "turnaround": "03_Bildreferenzen/09_Fahrzeuge/04_Pawglide_E_Scooter/00_Mehransichten.png",
+      "entry_reference": "03_Bildreferenzen/26_Open_City_Abenteuer/01_Fahrzeug_Einstieg_Ausstieg/05_Scooter_Aufsteigen.png",
+      "exit_reference": "03_Bildreferenzen/26_Open_City_Abenteuer/01_Fahrzeug_Einstieg_Ausstieg/06_Scooter_Absteigen.png",
+      "boarding_camera": "cam_board_land",
+      "control_camera": "cam_vehicle_land",
+      "required_sockets": [
+        "entry_driver",
+        "exit_driver_primary",
+        "seat_driver",
+        "camera_boarding",
+        "camera_drive",
+        "hand_bar_l",
+        "hand_bar_r",
+        "foot_deck_front",
+        "foot_deck_rear"
+      ],
+      "moving_parts": ["handlebar", "wheels", "kickstand", "fold_hinge"],
+      "animation_ids": [
+        "fox_scooter_mount",
+        "fox_scooter_push_start",
+        "fox_scooter_ride",
+        "fox_scooter_brake",
+        "fox_scooter_dismount"
+      ],
+      "entry_requires_stationary": true,
+      "dismount_max_speed_mps": 1.5
+    },
+    {
+      "id": "vehicle_bluefin_water_taxi",
+      "type": "electric_water_taxi",
+      "turnaround": "03_Bildreferenzen/09_Fahrzeuge/02_Bluefin_Wassertaxi/00_Mehransichten.png",
+      "entry_reference": "03_Bildreferenzen/26_Open_City_Abenteuer/01_Fahrzeug_Einstieg_Ausstieg/04_Wassertaxi_Borden.png",
+      "scene_reference": "03_Bildreferenzen/26_Open_City_Abenteuer/02_Hafen_Flugzeug_U_Boot_Szenen/02_Wassertaxi_Boarding.png",
+      "boarding_camera": "cam_board_water",
+      "control_camera": "cam_vehicle_water",
+      "required_sockets": [
+        "dock_anchor",
+        "entry_passenger",
+        "exit_passenger_primary",
+        "passenger_safe_zone",
+        "seat_passenger_01",
+        "camera_boarding",
+        "camera_drive",
+        "hand_gate",
+        "hand_rail",
+        "foot_ramp"
+      ],
+      "moving_parts": ["boarding_gate", "boarding_ramp", "rudder", "propulsion_unit"],
+      "animation_ids": [
+        "fox_boat_board",
+        "fox_boat_step_over_sill",
+        "fox_boat_seat",
+        "fox_boat_stand_rail",
+        "fox_boat_disembark"
+      ],
+      "entry_conditions": ["vehicle_docked", "ramp_deployed", "boarding_lane_clear"]
+    },
+    {
+      "id": "vehicle_skyfin",
+      "type": "electric_coastal_seaplane",
+      "turnaround": "03_Bildreferenzen/09_Fahrzeuge/05_Skyfin_Kuestenflugzeug/00_Mehransichten.png",
+      "entry_reference": "03_Bildreferenzen/26_Open_City_Abenteuer/01_Fahrzeug_Einstieg_Ausstieg/07_Skyfin_Einsteigen.png",
+      "seat_reference": "03_Bildreferenzen/26_Open_City_Abenteuer/01_Fahrzeug_Einstieg_Ausstieg/08_Skyfin_Anschnallen.png",
+      "scene_reference": "03_Bildreferenzen/26_Open_City_Abenteuer/02_Hafen_Flugzeug_U_Boot_Szenen/03_Skyfin_Boarding.png",
+      "boarding_camera": "cam_board_air",
+      "control_camera": "cam_vehicle_air",
+      "required_sockets": [
+        "entry_pilot",
+        "exit_pilot_primary",
+        "seat_pilot",
+        "camera_boarding",
+        "camera_drive",
+        "hand_grab_lower",
+        "hand_cockpit_frame",
+        "hand_control_l",
+        "hand_control_r",
+        "foot_float_step",
+        "foot_cockpit_step",
+        "belt_anchor_l",
+        "belt_anchor_r"
+      ],
+      "moving_parts": ["cockpit_door", "seat_belt", "propeller", "rudder", "ailerons"],
+      "animation_ids": [
+        "fox_skyfin_climb_step",
+        "fox_skyfin_enter_cockpit",
+        "fox_skyfin_buckle",
+        "fox_skyfin_flight_idle",
+        "fox_skyfin_unbuckle",
+        "fox_skyfin_exit"
+      ],
+      "entry_conditions": ["vehicle_docked_or_parked", "propeller_stopped", "cockpit_clear"]
+    },
+    {
+      "id": "vehicle_bluefin_scout",
+      "type": "electric_research_submarine",
+      "turnaround": "03_Bildreferenzen/24_Bluefin_Scout_U_Boot/00_Mehransichten.png",
+      "entry_reference": "03_Bildreferenzen/26_Open_City_Abenteuer/01_Fahrzeug_Einstieg_Ausstieg/09_U_Boot_Hatch_Einstieg.png",
+      "scene_reference": "03_Bildreferenzen/26_Open_City_Abenteuer/02_Hafen_Flugzeug_U_Boot_Szenen/04_Bluefin_Scout_Einstieg.png",
+      "boarding_camera": "cam_board_water",
+      "control_camera": "cam_vehicle_water",
+      "required_sockets": [
+        "dock_anchor",
+        "entry_pilot",
+        "exit_pilot_primary",
+        "seat_pilot",
+        "seat_passenger_01",
+        "camera_boarding",
+        "camera_drive",
+        "hand_hatch_l",
+        "hand_hatch_r",
+        "foot_ladder_01",
+        "foot_ladder_02",
+        "cabin_clear"
+      ],
+      "moving_parts": ["top_hatch", "internal_ladder", "thrusters", "camera_arm"],
+      "animation_ids": [
+        "fox_sub_hatch_enter",
+        "fox_sub_ladder_down",
+        "fox_sub_seat",
+        "fox_sub_pilot_idle",
+        "fox_sub_ladder_up",
+        "fox_sub_hatch_exit"
+      ],
+      "entry_conditions": ["vehicle_docked", "pressure_equalized", "hatch_unlocked"],
+      "weapons": false
+    }
+  ],
+  "implementation_questions": [
+    {
+      "id": "engine_and_version",
+      "question_de": "Welche Engine und genaue Version verwendet das Projekt?",
+      "required_before": "socket_and_animator_setup"
+    },
+    {
+      "id": "character_rig_source",
+      "question_de": "Wo liegt das aktuelle Fynnox-Rig beziehungsweise das editierbare Modellquellformat?",
+      "required_before": "ik_and_root_motion"
+    },
+    {
+      "id": "vehicle_source_formats",
+      "question_de": "In welchem editierbaren Quellformat werden die Fahrzeugmodelle erstellt?",
+      "required_before": "moving_part_pivots"
+    },
+    {
+      "id": "input_target",
+      "question_de": "Soll der erste Test mit Touch, Gamepad, Tastatur oder allen drei Eingaben erfolgen?",
+      "required_before": "interaction_test"
+    },
+    {
+      "id": "savegame_strategy",
+      "question_de": "Welches Savegame-Verfahren ist im vorhandenen Projekt bereits aktiv?",
+      "required_before": "vehicle_state_persistence"
+    }
+  ]
+}

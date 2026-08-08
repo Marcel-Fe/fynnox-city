@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1920" viewBox="0 0 1080 1920" role="img" aria-labelledby="title desc">
+  <title id="title">Fynnox City – Touch-Steuerung</title>
+  <desc id="desc">Lokalisierbare Tutorial-Vorlage für Bewegung, Kamera und Sprung.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#071b31"/><stop offset="1" stop-color="#123b55"/></linearGradient>
+  </defs>
+  <rect width="1080" height="1920" fill="url(#bg)"/>
+  <circle cx="540" cy="145" r="58" fill="#ff7a45"/><g fill="#09243d"><ellipse cx="515" cy="119" rx="13" ry="18"/><ellipse cx="550" cy="111" rx="13" ry="18"/><ellipse cx="581" cy="127" rx="13" ry="18"/><path d="M502 165c0-30 25-47 49-47s49 17 49 47c0 24-18 39-49 39s-49-15-49-39z"/></g>
+  <text id="tutorial.move.title" x="540" y="290" fill="#fff8eb" font-family="system-ui,sans-serif" font-size="66" font-weight="750" text-anchor="middle">Bewegen &amp; umsehen</text>
+  <text id="tutorial.move.body" x="540" y="365" fill="#bcecf2" font-family="system-ui,sans-serif" font-size="34" text-anchor="middle">Links laufen · rechts Kamera drehen</text>
+  <g><rect x="90" y="470" width="900" height="880" rx="54" fill="#f8f1e6"/></g>
+  <g transform="translate(285 840)"><circle r="150" fill="#d9e4e4" stroke="#173b54" stroke-width="12"/><circle r="62" fill="#ff7a45"/><path d="M0-116l-25 40h50zM116 0L76-25v50zM0 116l25-40h-50zM-116 0l40 25v-50z" fill="#173b54"/><text y="225" fill="#173b54" font-family="system-ui,sans-serif" font-size="32" font-weight="700" text-anchor="middle">LAUFEN</text></g>
+  <g transform="translate(795 800)"><path d="M-135 0c70-90 200-90 270 0M-135 0l30-66M-135 0l68 7M135 0l-30-66M135 0l-68 7" fill="none" stroke="#18bfd0" stroke-width="20" stroke-linecap="round"/><circle r="72" fill="#173b54"/><circle r="28" fill="#18bfd0"/><text y="265" fill="#173b54" font-family="system-ui,sans-serif" font-size="32" font-weight="700" text-anchor="middle">KAMERA</text></g>
+  <g transform="translate(780 1165)"><circle r="104" fill="#ff7a45"/><path d="M-40 26L0-32l40 58M0-30v88" fill="none" stroke="#fff8eb" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/><text y="160" fill="#173b54" font-family="system-ui,sans-serif" font-size="32" font-weight="700" text-anchor="middle">SPRINGEN</text></g>
+  <g fill="#18bfd0"><rect x="415" y="1435" width="80" height="12" rx="6"/><rect x="505" y="1435" width="38" height="12" rx="6" opacity=".35"/><rect x="553" y="1435" width="38" height="12" rx="6" opacity=".35"/><rect x="601" y="1435" width="38" height="12" rx="6" opacity=".35"/><rect x="649" y="1435" width="38" height="12" rx="6" opacity=".35"/></g>
+  <rect x="140" y="1570" width="800" height="126" rx="63" fill="#ff7a45"/><text id="tutorial.common.next" x="540" y="1652" fill="#09243d" font-family="system-ui,sans-serif" font-size="42" font-weight="800" text-anchor="middle">Weiter</text>
+  <text id="tutorial.common.skip" x="540" y="1800" fill="#bcecf2" font-family="system-ui,sans-serif" font-size="30" text-anchor="middle">Tutorial später wiederholen</text>
+</svg>

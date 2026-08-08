@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1672" height="941" viewBox="0 0 1672 941">
+  <defs>
+    <style>
+      .t { font-family:'DejaVu Sans',sans-serif; font-weight:700; fill:#fff; }
+      .s { paint-order:stroke; stroke:#001a3d; stroke-width:5px; }
+    </style>
+  </defs>
+  <rect width="1672" height="941" fill="#001a3d" fill-opacity="0.13"/>
+  <rect x="54" y="48" width="250" height="70" rx="28" fill="#001a3d" fill-opacity="0.9" stroke="#20c8ff" stroke-width="4"/>
+  <text class="t" x="91" y="93" font-size="30">SCANNER</text>
+  <circle cx="263" cy="83" r="12" fill="#20c8ff"/>
+  <path d="M1050 214h80M1050 214v80M1540 214h-80M1540 214v80M1050 778h80M1050 778v-80M1540 778h-80M1540 778v-80" fill="none" stroke="#20c8ff" stroke-width="10" stroke-linecap="round"/>
+  <rect x="1090" y="645" width="410" height="94" rx="24" fill="#001a3d" fill-opacity="0.9" stroke="#ff9e22" stroke-width="4"/>
+  <text class="t" x="1122" y="681" font-size="23" fill="#ff9e22">PAWGLIDE E-SCOOTER</text>
+  <text class="t" x="1122" y="716" font-size="25">BEREIT · 84 % ENERGIE</text>
+  <rect x="650" y="818" width="372" height="74" rx="30" fill="#001a3d" fill-opacity="0.9" stroke="#ffffff" stroke-width="3"/>
+  <circle cx="703" cy="855" r="23" fill="#ff9e22"/><text class="t" x="694" y="866" font-size="30">A</text>
+  <text class="t" x="747" y="865" font-size="27">BENUTZEN</text>
+</svg>

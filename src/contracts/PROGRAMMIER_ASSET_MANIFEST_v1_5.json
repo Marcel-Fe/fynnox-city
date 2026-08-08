@@ -1,0 +1,114 @@
+{
+  "schema_version": "1.1",
+  "package_version": "1.5",
+  "project": "Fynnox City",
+  "extends": "05_Technik_und_Marke/PROGRAMMIER_ASSET_MANIFEST_v1_4.json",
+  "import_contract": {
+    "generated_png_role": "model_animation_or_state_reference",
+    "svg_role": "editable_ui_source",
+    "json_role": "machine_readable_mapping",
+    "not_included": ["finished_glb_models", "rigs", "animation_clips", "audio_files", "engine_scenes", "gameplay_code"]
+  },
+  "player_animation_additions": [
+    {"id": "fox_collect_spot", "system": "PlayerInteractionController", "file": "03_Bildreferenzen/19_Fynnox_Erweiterte_Aktionen/01_Sammeln_Einloesen_Aufwerten/01_Fund_Entdecken.png"},
+    {"id": "fox_collect_pickup", "system": "PlayerInteractionController", "file": "03_Bildreferenzen/19_Fynnox_Erweiterte_Aktionen/01_Sammeln_Einloesen_Aufwerten/02_Stadtfunke_Aufheben.png"},
+    {"id": "fox_redeem", "system": "PlayerInteractionController", "file": "03_Bildreferenzen/19_Fynnox_Erweiterte_Aktionen/01_Sammeln_Einloesen_Aufwerten/05_Taler_Einloesen.png"},
+    {"id": "fox_install_upgrade", "system": "PlayerInteractionController", "file": "03_Bildreferenzen/19_Fynnox_Erweiterte_Aktionen/01_Sammeln_Einloesen_Aufwerten/07_Modul_Montieren.png"},
+    {"id": "fox_balance", "system": "PlayerAnimator", "file": "03_Bildreferenzen/19_Fynnox_Erweiterte_Aktionen/02_Erweiterte_Fortbewegung/01_Balancieren.png"},
+    {"id": "fox_vault_safe", "system": "PlayerAnimator", "file": "03_Bildreferenzen/19_Fynnox_Erweiterte_Aktionen/02_Erweiterte_Fortbewegung/02_Sicherer_Vault.png"},
+    {"id": "fox_slide", "system": "PlayerAnimator", "file": "03_Bildreferenzen/19_Fynnox_Erweiterte_Aktionen/02_Erweiterte_Fortbewegung/03_Rutschen.png"},
+    {"id": "fox_wallrun", "system": "PlayerAnimator", "file": "03_Bildreferenzen/19_Fynnox_Erweiterte_Aktionen/02_Erweiterte_Fortbewegung/05_Wallrun_Schritt.png"},
+    {"id": "fox_zipline", "system": "PlayerAnimator", "file": "03_Bildreferenzen/19_Fynnox_Erweiterte_Aktionen/02_Erweiterte_Fortbewegung/06_Seilrutsche.png"},
+    {"id": "fox_swim", "system": "PlayerAnimator", "file": "03_Bildreferenzen/19_Fynnox_Erweiterte_Aktionen/02_Erweiterte_Fortbewegung/07_Schwimmen.png"},
+    {"id": "fox_water_exit", "system": "PlayerAnimator", "file": "03_Bildreferenzen/19_Fynnox_Erweiterte_Aktionen/02_Erweiterte_Fortbewegung/08_Aus_Wasser_Steigen.png"},
+    {"id": "fox_controlled_stumble", "system": "PlayerAnimator", "file": "03_Bildreferenzen/19_Fynnox_Erweiterte_Aktionen/04_Rivalitaet_und_Erholung/04_Kontrolliertes_Stolpern.png"},
+    {"id": "fox_recover_balance", "system": "PlayerAnimator", "file": "03_Bildreferenzen/19_Fynnox_Erweiterte_Aktionen/04_Rivalitaet_und_Erholung/05_Abfangen.png"},
+    {"id": "fox_safe_brake", "system": "VehicleController", "file": "03_Bildreferenzen/19_Fynnox_Erweiterte_Aktionen/04_Rivalitaet_und_Erholung/06_Sicher_Bremsen.png"},
+    {"id": "fox_receive_returned_item", "system": "QuestController", "file": "03_Bildreferenzen/19_Fynnox_Erweiterte_Aktionen/04_Rivalitaet_und_Erholung/08_Paket_Zurueckerhalten.png"}
+  ],
+  "rivals": [
+    {
+      "id": "rival_riva",
+      "archetype": "route_vehicle_rival",
+      "turnaround": "03_Bildreferenzen/18_Rivalen_und_Konflikte/01_Riva/01_Modellansichten/00_Mehransichten.png",
+      "poses": "03_Bildreferenzen/18_Rivalen_und_Konflikte/01_Riva/02_Animationsposen",
+      "allowed_actions": ["overtake_with_clearance", "rotate_route_sign", "choose_shortcut", "return_quest_item"],
+      "forbidden_actions": ["ram_player", "force_off_road", "wallet_theft", "injury"]
+    },
+    {
+      "id": "rival_kipp",
+      "archetype": "flying_quest_trickster",
+      "turnaround": "03_Bildreferenzen/18_Rivalen_und_Konflikte/02_Kipp/01_Modellansichten/00_Mehransichten.png",
+      "poses": "03_Bildreferenzen/18_Rivalen_und_Konflikte/02_Kipp/02_Animationsposen",
+      "allowed_actions": ["temporarily_move_quest_tag", "leave_scanner_trail", "return_quest_item"],
+      "forbidden_actions": ["currency_theft", "permanent_item_loss", "attack_player"]
+    },
+    {
+      "id": "rival_director_brak",
+      "archetype": "civic_procedure_rival",
+      "turnaround": "03_Bildreferenzen/18_Rivalen_und_Konflikte/03_Direktor_Brak/01_Modellansichten/00_Mehransichten.png",
+      "poses": "03_Bildreferenzen/18_Rivalen_und_Konflikte/03_Direktor_Brak/02_Animationsposen",
+      "allowed_actions": ["temporary_route_closure", "request_evidence", "approve_revised_plan"],
+      "forbidden_actions": ["indefinite_progress_block", "threat", "violence"]
+    }
+  ],
+  "collectibles": [
+    {"id": "city_spark", "file": "03_Bildreferenzen/20_Sammeln_Einloesen_und_VFX/01_Sammelmodelle/01_Stadtfunke.png", "inventory": "score", "persistent": true},
+    {"id": "paw_token", "file": "03_Bildreferenzen/20_Sammeln_Einloesen_und_VFX/01_Sammelmodelle/02_Tatz_Taler.png", "inventory": "soft_currency", "persistent": true},
+    {"id": "recycle_bundle", "file": "03_Bildreferenzen/20_Sammeln_Einloesen_und_VFX/01_Sammelmodelle/03_Wertstoffpaket.png", "inventory": "material", "persistent": true},
+    {"id": "blueprint_fragment", "file": "03_Bildreferenzen/20_Sammeln_Einloesen_und_VFX/01_Sammelmodelle/04_Bauplanfragment.png", "inventory": "unlock_fragment", "persistent": true},
+    {"id": "sea_glass", "file": "03_Bildreferenzen/20_Sammeln_Einloesen_und_VFX/01_Sammelmodelle/05_Seeglas.png", "inventory": "collection", "persistent": true},
+    {"id": "postcard", "file": "03_Bildreferenzen/20_Sammeln_Einloesen_und_VFX/01_Sammelmodelle/06_Postkarte.png", "inventory": "collection", "persistent": true},
+    {"id": "research_sample", "file": "03_Bildreferenzen/20_Sammeln_Einloesen_und_VFX/01_Sammelmodelle/07_Forschungsprobe.png", "inventory": "research", "persistent": true},
+    {"id": "energy_cell", "file": "03_Bildreferenzen/20_Sammeln_Einloesen_und_VFX/01_Sammelmodelle/08_Energieakku.png", "inventory": "mission_resource", "persistent": true},
+    {"id": "city_medal", "file": "03_Bildreferenzen/20_Sammeln_Einloesen_und_VFX/01_Sammelmodelle/09_Stadtorden.png", "inventory": "milestone", "persistent": true}
+  ],
+  "reward_stations": [
+    {"id": "station_maker_exchange", "file": "03_Bildreferenzen/20_Sammeln_Einloesen_und_VFX/02_Einloesestationen/01_Maker_Tauschkiosk.png"},
+    {"id": "station_appraisal", "file": "03_Bildreferenzen/20_Sammeln_Einloesen_und_VFX/02_Einloesestationen/02_Fundbewertung.png"},
+    {"id": "station_recycling", "file": "03_Bildreferenzen/20_Sammeln_Einloesen_und_VFX/02_Einloesestationen/03_Recyclingstation.png"},
+    {"id": "station_wardrobe", "file": "03_Bildreferenzen/20_Sammeln_Einloesen_und_VFX/02_Einloesestationen/04_Kleiderkabine.png"},
+    {"id": "station_vehicle_upgrade", "file": "03_Bildreferenzen/20_Sammeln_Einloesen_und_VFX/02_Einloesestationen/05_Fahrzeugupgrade.png"},
+    {"id": "station_collection_display", "file": "03_Bildreferenzen/20_Sammeln_Einloesen_und_VFX/02_Einloesestationen/06_Sammlungsvitrine.png"},
+    {"id": "station_marine_lab", "file": "03_Bildreferenzen/20_Sammeln_Einloesen_und_VFX/02_Einloesestationen/07_Meereslabor.png"},
+    {"id": "station_city_project", "file": "03_Bildreferenzen/20_Sammeln_Einloesen_und_VFX/02_Einloesestationen/08_Stadtprojekt_Tafel.png"},
+    {"id": "station_photo_scanner", "file": "03_Bildreferenzen/20_Sammeln_Einloesen_und_VFX/02_Einloesestationen/09_Foto_Scanner_Upgrade.png"}
+  ],
+  "vfx": [
+    {"id": "vfx_collect_sparkle", "file": "03_Bildreferenzen/20_Sammeln_Einloesen_und_VFX/03_VFX/01_Sammelfunkeln.png", "reduced_motion_scale": 0.5},
+    {"id": "vfx_token_burst", "file": "03_Bildreferenzen/20_Sammeln_Einloesen_und_VFX/03_VFX/02_Taler_Burst.png", "reduced_motion_scale": 0.5},
+    {"id": "vfx_pickup_trail", "file": "03_Bildreferenzen/20_Sammeln_Einloesen_und_VFX/03_VFX/03_Aufnahmepfad.png", "reduced_motion_scale": 0.5},
+    {"id": "vfx_scanner_ping", "file": "03_Bildreferenzen/20_Sammeln_Einloesen_und_VFX/03_VFX/04_Scanner_Ping.png", "reduced_motion_scale": 0.65},
+    {"id": "vfx_mission_marker", "file": "03_Bildreferenzen/20_Sammeln_Einloesen_und_VFX/03_VFX/05_Missionsmarker.png", "reduced_motion_scale": 0.75},
+    {"id": "vfx_water_splash", "file": "03_Bildreferenzen/20_Sammeln_Einloesen_und_VFX/03_VFX/06_Wasserspritzer.png", "reduced_motion_scale": 0.6},
+    {"id": "vfx_landing_dust", "file": "03_Bildreferenzen/20_Sammeln_Einloesen_und_VFX/03_VFX/07_Landestaub.png", "reduced_motion_scale": 0.6},
+    {"id": "vfx_leaf_gust", "file": "03_Bildreferenzen/20_Sammeln_Einloesen_und_VFX/03_VFX/08_Blaetterwind.png", "reduced_motion_scale": 0.5},
+    {"id": "vfx_unlock_confetti", "file": "03_Bildreferenzen/20_Sammeln_Einloesen_und_VFX/03_VFX/09_Freischaltkonfetti.png", "reduced_motion_scale": 0.4}
+  ],
+  "world_projects": [
+    {"id": "project_harbor_terrace", "folder": "03_Bildreferenzen/21_Stadtprojekte_Vorher_Nachher/01_Hafen", "states": ["state_0_before", "state_1_cleanup", "state_2_build", "state_3_complete"]},
+    {"id": "project_maker_market", "folder": "03_Bildreferenzen/21_Stadtprojekte_Vorher_Nachher/02_Maker_Markt", "states": ["state_0_before", "state_1_cleanup", "state_2_build", "state_3_complete"]},
+    {"id": "project_coastal_park", "folder": "03_Bildreferenzen/21_Stadtprojekte_Vorher_Nachher/03_Kuestenpark", "states": ["state_0_before", "state_1_cleanup", "state_2_build", "state_3_complete"]}
+  ],
+  "ambient_wildlife": [
+    {"id": "wildlife_harbor_gull", "turnaround": "03_Bildreferenzen/22_Tiere_und_Insekten/01_Hafenmoewe/00_Mehransichten.png"},
+    {"id": "wildlife_harbor_crab", "turnaround": "03_Bildreferenzen/22_Tiere_und_Insekten/02_Hafenkrabbe/00_Mehransichten.png"},
+    {"id": "wildlife_coastal_butterfly", "turnaround": "03_Bildreferenzen/22_Tiere_und_Insekten/03_Kuestenfalter/00_Mehransichten.png"}
+  ],
+  "vehicle_additions": [
+    {"id": "vehicle_bluefin_scout", "type": "electric_research_submarine", "turnaround": "03_Bildreferenzen/24_Bluefin_Scout_U_Boot/00_Mehransichten.png", "seats": 2, "weapons": false}
+  ],
+  "onboarding": {
+    "tokens": "03_Bildreferenzen/25_Onboarding_Hilfe_und_Barrierefreiheit/ONBOARDING_TOKENS.json",
+    "screens": ["tutorial_move", "tutorial_collect", "tutorial_vehicle", "tutorial_rival", "settings_accessibility"],
+    "repeatable_from_help_menu": true,
+    "skippable": true
+  },
+  "safety_invariants": {
+    "wallet_never_negative": true,
+    "rivals_cannot_remove_persistent_currency": true,
+    "quest_item_recovery_required": true,
+    "vehicle_ramming_disabled": true,
+    "injury_or_weapon_system": false
+  }
+}

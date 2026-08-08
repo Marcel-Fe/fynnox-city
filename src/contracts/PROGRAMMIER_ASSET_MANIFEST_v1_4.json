@@ -1,0 +1,131 @@
+{
+  "schema_version": "1.0",
+  "package_version": "1.4",
+  "project": "Fynnox City",
+  "studio": "Fynnox Studios",
+  "units": {
+    "world_unit_meters": 1.0,
+    "snap_grid_meters": 0.5,
+    "up_axis": "+Y",
+    "right_axis": "+X",
+    "model_forward_axis": "-Z"
+  },
+  "animation_states": [
+    {"id": "fox_idle", "system": "PlayerAnimator", "file": "03_Bildreferenzen/13_Animation_und_Gameplay_States/01_Fynnox_Fortbewegung/01_Idle.png"},
+    {"id": "fox_walk", "system": "PlayerAnimator", "file": "03_Bildreferenzen/13_Animation_und_Gameplay_States/01_Fynnox_Fortbewegung/02_Gehen.png"},
+    {"id": "fox_run_start", "system": "PlayerAnimator", "file": "03_Bildreferenzen/13_Animation_und_Gameplay_States/01_Fynnox_Fortbewegung/03_Lauf_Start.png"},
+    {"id": "fox_sprint", "system": "PlayerAnimator", "file": "03_Bildreferenzen/13_Animation_und_Gameplay_States/01_Fynnox_Fortbewegung/04_Sprint.png"},
+    {"id": "fox_jump_start", "system": "PlayerAnimator", "file": "03_Bildreferenzen/13_Animation_und_Gameplay_States/01_Fynnox_Fortbewegung/05_Sprung_Start.png"},
+    {"id": "fox_jump_air", "system": "PlayerAnimator", "file": "03_Bildreferenzen/13_Animation_und_Gameplay_States/01_Fynnox_Fortbewegung/06_Sprung_Luft.png"},
+    {"id": "fox_land_soft", "system": "PlayerAnimator", "file": "03_Bildreferenzen/13_Animation_und_Gameplay_States/01_Fynnox_Fortbewegung/07_Landung.png"},
+    {"id": "fox_ledge_grab", "system": "PlayerAnimator", "file": "03_Bildreferenzen/13_Animation_und_Gameplay_States/01_Fynnox_Fortbewegung/08_Kante_Greifen.png"},
+    {"id": "fox_climb_up", "system": "PlayerAnimator", "file": "03_Bildreferenzen/13_Animation_und_Gameplay_States/01_Fynnox_Fortbewegung/09_Hochziehen.png"},
+    {"id": "fox_pickup", "system": "PlayerInteractionController", "file": "03_Bildreferenzen/13_Animation_und_Gameplay_States/02_Fynnox_Interaktion/01_Gegenstand_Aufheben.png"},
+    {"id": "fox_carry", "system": "PlayerInteractionController", "file": "03_Bildreferenzen/13_Animation_und_Gameplay_States/02_Fynnox_Interaktion/02_Gegenstand_Tragen.png"},
+    {"id": "fox_place", "system": "PlayerInteractionController", "file": "03_Bildreferenzen/13_Animation_und_Gameplay_States/02_Fynnox_Interaktion/03_Gegenstand_Abstellen.png"},
+    {"id": "fox_scan", "system": "PlayerInteractionController", "file": "03_Bildreferenzen/13_Animation_und_Gameplay_States/02_Fynnox_Interaktion/04_Scanner_Benutzen.png"},
+    {"id": "fox_press_button", "system": "PlayerInteractionController", "file": "03_Bildreferenzen/13_Animation_und_Gameplay_States/02_Fynnox_Interaktion/05_Schalter_Druecken.png"},
+    {"id": "fox_open_door", "system": "PlayerInteractionController", "file": "03_Bildreferenzen/13_Animation_und_Gameplay_States/02_Fynnox_Interaktion/06_Tuer_Oeffnen.png"},
+    {"id": "fox_enter_vehicle", "system": "PlayerInteractionController", "file": "03_Bildreferenzen/13_Animation_und_Gameplay_States/02_Fynnox_Interaktion/07_Fahrzeug_Einsteigen.png"},
+    {"id": "fox_drive_vehicle", "system": "VehicleController", "file": "03_Bildreferenzen/13_Animation_und_Gameplay_States/02_Fynnox_Interaktion/08_Fahrzeug_Lenken.png"},
+    {"id": "fox_wave", "system": "PlayerAnimator", "file": "03_Bildreferenzen/13_Animation_und_Gameplay_States/02_Fynnox_Interaktion/09_Freundlich_Winken.png"}
+  ],
+  "face_states": [
+    {"id": "face_neutral", "file": "03_Bildreferenzen/13_Animation_und_Gameplay_States/03_Fynnox_Dialog_Emotionen/01_Neutral.png"},
+    {"id": "face_smile", "file": "03_Bildreferenzen/13_Animation_und_Gameplay_States/03_Fynnox_Dialog_Emotionen/02_Sanftes_Laecheln.png"},
+    {"id": "viseme_small", "file": "03_Bildreferenzen/13_Animation_und_Gameplay_States/03_Fynnox_Dialog_Emotionen/03_Sprechen_Klein.png"},
+    {"id": "viseme_wide", "file": "03_Bildreferenzen/13_Animation_und_Gameplay_States/03_Fynnox_Dialog_Emotionen/04_Sprechen_Weit.png"},
+    {"id": "viseme_o", "file": "03_Bildreferenzen/13_Animation_und_Gameplay_States/03_Fynnox_Dialog_Emotionen/05_Mund_O.png"},
+    {"id": "viseme_e", "file": "03_Bildreferenzen/13_Animation_und_Gameplay_States/03_Fynnox_Dialog_Emotionen/06_Mund_E.png"},
+    {"id": "expr_surprised", "file": "03_Bildreferenzen/13_Animation_und_Gameplay_States/03_Fynnox_Dialog_Emotionen/07_Ueberrascht.png"},
+    {"id": "expr_thinking", "file": "03_Bildreferenzen/13_Animation_und_Gameplay_States/03_Fynnox_Dialog_Emotionen/08_Nachdenken.png"},
+    {"id": "expr_agree", "file": "03_Bildreferenzen/13_Animation_und_Gameplay_States/03_Fynnox_Dialog_Emotionen/09_Zustimmen.png"},
+    {"id": "expr_disagree", "file": "03_Bildreferenzen/13_Animation_und_Gameplay_States/03_Fynnox_Dialog_Emotionen/10_Besorgt_Ablehnen.png"},
+    {"id": "expr_laugh", "file": "03_Bildreferenzen/13_Animation_und_Gameplay_States/03_Fynnox_Dialog_Emotionen/11_Lachen.png"},
+    {"id": "expr_excited", "file": "03_Bildreferenzen/13_Animation_und_Gameplay_States/03_Fynnox_Dialog_Emotionen/12_Begeistert.png"}
+  ],
+  "ambient_states": [
+    {"id": "npc_walk", "activity_point": "Route", "file": "03_Bildreferenzen/13_Animation_und_Gameplay_States/04_Ambient_NPC_Aktivitaeten/01_Gehen.png"},
+    {"id": "npc_look_around", "activity_point": "WaitLook", "file": "03_Bildreferenzen/13_Animation_und_Gameplay_States/04_Ambient_NPC_Aktivitaeten/02_Umschauen.png"},
+    {"id": "npc_chat_pair", "activity_point": "TalkPair", "file": "03_Bildreferenzen/13_Animation_und_Gameplay_States/04_Ambient_NPC_Aktivitaeten/03_Zweiergruppe_Reden.png"},
+    {"id": "npc_sit_bench", "activity_point": "Seat", "file": "03_Bildreferenzen/13_Animation_und_Gameplay_States/04_Ambient_NPC_Aktivitaeten/04_Bank_Sitzen.png"},
+    {"id": "npc_carry_parcel", "activity_point": "CarryRoute", "file": "03_Bildreferenzen/13_Animation_und_Gameplay_States/04_Ambient_NPC_Aktivitaeten/05_Paket_Tragen.png"},
+    {"id": "npc_sweep", "activity_point": "WorkSweep", "file": "03_Bildreferenzen/13_Animation_und_Gameplay_States/04_Ambient_NPC_Aktivitaeten/06_Fegen.png"},
+    {"id": "npc_water_planter", "activity_point": "WorkWater", "file": "03_Bildreferenzen/13_Animation_und_Gameplay_States/04_Ambient_NPC_Aktivitaeten/07_Pflanzen_Giessen.png"},
+    {"id": "npc_wait_transit", "activity_point": "TransitWait", "file": "03_Bildreferenzen/13_Animation_und_Gameplay_States/04_Ambient_NPC_Aktivitaeten/08_Haltestelle_Warten.png"},
+    {"id": "npc_enter_vehicle", "activity_point": "TransitDoor", "file": "03_Bildreferenzen/13_Animation_und_Gameplay_States/04_Ambient_NPC_Aktivitaeten/09_Fahrzeug_Einsteigen.png"}
+  ],
+  "interaction_objects": [
+    {
+      "id": "garage_door",
+      "system": "InteractableStateMachine",
+      "states": {
+        "door_closed": "03_Bildreferenzen/17_UI_und_Interaktionssysteme/02_Interaktionsobjekte/01_Tor_Geschlossen.png",
+        "door_open": "03_Bildreferenzen/17_UI_und_Interaktionssysteme/02_Interaktionsobjekte/02_Tor_Geoeffnet.png"
+      }
+    },
+    {
+      "id": "wall_switch",
+      "system": "InteractableStateMachine",
+      "states": {
+        "switch_idle": "03_Bildreferenzen/17_UI_und_Interaktionssysteme/02_Interaktionsobjekte/03_Schalter_Inaktiv.png",
+        "switch_active": "03_Bildreferenzen/17_UI_und_Interaktionssysteme/02_Interaktionsobjekte/04_Schalter_Aktiv.png"
+      }
+    },
+    {
+      "id": "charging_station",
+      "system": "InteractableStateMachine",
+      "states": {
+        "charger_ready": "03_Bildreferenzen/17_UI_und_Interaktionssysteme/02_Interaktionsobjekte/05_Ladestation_Bereit.png",
+        "charger_charging": "03_Bildreferenzen/17_UI_und_Interaktionssysteme/02_Interaktionsobjekte/06_Ladestation_Laedt.png"
+      }
+    }
+  ],
+  "hud_states": [
+    {"id": "hud_exploration", "input_context": "ctx_on_foot", "file": "03_Bildreferenzen/17_UI_und_Interaktionssysteme/01_HUD_Zustaende/01_Exploration_HUD.png"},
+    {"id": "hud_vehicle", "input_context": "ctx_vehicle", "file": "03_Bildreferenzen/17_UI_und_Interaktionssysteme/01_HUD_Zustaende/02_Fahrzeug_HUD_DE.png"},
+    {"id": "hud_dialogue", "input_context": "ctx_dialogue", "file": "03_Bildreferenzen/17_UI_und_Interaktionssysteme/01_HUD_Zustaende/03_Dialog_HUD_DE.png"},
+    {"id": "hud_scanner", "input_context": "ctx_scanner", "file": "03_Bildreferenzen/17_UI_und_Interaktionssysteme/01_HUD_Zustaende/04_Scanner_Interaktion_HUD.png"},
+    {"id": "hud_pause", "input_context": "ctx_menu", "file": "03_Bildreferenzen/17_UI_und_Interaktionssysteme/01_HUD_Zustaende/05_Pause_Karte_HUD.png"},
+    {"id": "hud_safe_area_debug", "input_context": "ctx_debug", "file": "03_Bildreferenzen/17_UI_und_Interaktionssysteme/01_HUD_Zustaende/06_HUD_Safe_Area_Programmieransicht.png"}
+  ],
+  "ui_icons": [
+    {"id": "icon_talk", "action": "action_talk", "file": "03_Bildreferenzen/17_UI_und_Interaktionssysteme/03_UI_Icons/01_Sprechen.png"},
+    {"id": "icon_use", "action": "action_use", "file": "03_Bildreferenzen/17_UI_und_Interaktionssysteme/03_UI_Icons/02_Benutzen.png"},
+    {"id": "icon_scan", "action": "action_scan", "file": "03_Bildreferenzen/17_UI_und_Interaktionssysteme/03_UI_Icons/03_Scanner.png"},
+    {"id": "icon_pickup", "action": "action_pickup", "file": "03_Bildreferenzen/17_UI_und_Interaktionssysteme/03_UI_Icons/04_Aufheben.png"},
+    {"id": "icon_enter_vehicle", "action": "action_enter_vehicle", "file": "03_Bildreferenzen/17_UI_und_Interaktionssysteme/03_UI_Icons/05_Fahrzeug_Einsteigen.png"},
+    {"id": "icon_exit_vehicle", "action": "action_exit_vehicle", "file": "03_Bildreferenzen/17_UI_und_Interaktionssysteme/03_UI_Icons/06_Fahrzeug_Aussteigen.png"},
+    {"id": "icon_map", "action": "action_map", "file": "03_Bildreferenzen/17_UI_und_Interaktionssysteme/03_UI_Icons/07_Karte.png"},
+    {"id": "icon_mission", "action": "action_mission", "file": "03_Bildreferenzen/17_UI_und_Interaktionssysteme/03_UI_Icons/08_Mission.png"},
+    {"id": "icon_photo", "action": "action_photo", "file": "03_Bildreferenzen/17_UI_und_Interaktionssysteme/03_UI_Icons/09_Foto.png"},
+    {"id": "icon_inventory", "action": "action_inventory", "file": "03_Bildreferenzen/17_UI_und_Interaktionssysteme/03_UI_Icons/10_Inventar.png"},
+    {"id": "icon_pause", "action": "action_pause", "file": "03_Bildreferenzen/17_UI_und_Interaktionssysteme/03_UI_Icons/11_Pause.png"},
+    {"id": "icon_settings", "action": "action_settings", "file": "03_Bildreferenzen/17_UI_und_Interaktionssysteme/03_UI_Icons/12_Einstellungen.png"}
+  ],
+  "world_zones": [
+    {"id": "Z01_SKY_GARDEN", "priority": "P1"},
+    {"id": "Z02_MAKER_MARKET", "priority": "P0"},
+    {"id": "Z03_CENTRAL_PLAZA", "priority": "P0"},
+    {"id": "Z04_FOXTAIL_GARAGE", "priority": "P0"},
+    {"id": "Z05_METRO_TRAM", "priority": "P0"},
+    {"id": "Z06_HARBOR", "priority": "P0"}
+  ],
+  "store_assets": {
+    "google_feature_graphic_de": "03_Bildreferenzen/16_Store_Material/02_Google_Play/Fynnox_City_Feature_1024x500_DE.png",
+    "google_feature_graphic_clean": "03_Bildreferenzen/16_Store_Material/02_Google_Play/Fynnox_City_Feature_1024x500_Ohne_Text.png",
+    "google_portrait_screenshots_de": [
+      "03_Bildreferenzen/16_Store_Material/02_Google_Play/01_Stadterkundung_1080x1920_DE.png",
+      "03_Bildreferenzen/16_Store_Material/02_Google_Play/02_Fahrzeuge_1080x1920_DE.png",
+      "03_Bildreferenzen/16_Store_Material/02_Google_Play/03_Missionen_1080x1920_DE.png"
+    ],
+    "apple_iphone_6_9_screenshots_de": [
+      "03_Bildreferenzen/16_Store_Material/03_Apple_App_Store/01_Stadterkundung_1320x2868_DE.png",
+      "03_Bildreferenzen/16_Store_Material/03_Apple_App_Store/02_Fahrzeuge_1320x2868_DE.png",
+      "03_Bildreferenzen/16_Store_Material/03_Apple_App_Store/03_Missionen_1320x2868_DE.png"
+    ],
+    "google_icon": "03_Bildreferenzen/16_Store_Material/04_App_Icon/Fynnox_City_App_Icon_Google_512x512.png",
+    "apple_icon_master": "03_Bildreferenzen/16_Store_Material/04_App_Icon/Fynnox_City_App_Icon_Apple_1024x1024.png",
+    "google_mission_text_overlay_de": "03_Bildreferenzen/16_Store_Material/05_Lokalisierbare_Textoverlays/Google_Missionen_DE_1080x1920.svg"
+  }
+}

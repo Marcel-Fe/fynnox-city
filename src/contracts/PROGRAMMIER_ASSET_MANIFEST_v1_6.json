@@ -1,0 +1,77 @@
+{
+  "schema_version": "1.2",
+  "package_version": "1.6",
+  "project": "Fynnox City",
+  "extends": "05_Technik_und_Marke/PROGRAMMIER_ASSET_MANIFEST_v1_5.json",
+  "art_direction": {
+    "world_geometry": "full_3d",
+    "camera": "free_orbit_third_person",
+    "render_style": "graphic_adventure_3d",
+    "material_model": "soft_pbr_toon_hybrid",
+    "photorealism_required": false,
+    "pure_2d_or_2_5d_world": false,
+    "reference": "04_Modelllisten/SPIELVISION_OPEN_CITY_ABENTEUER_v1_6.md"
+  },
+  "vehicle_interaction_contract": "05_Technik_und_Marke/FAHRZEUG_INTERAKTIONSMANIFEST_v1_6.json",
+  "vehicle_animation_references": [
+    {"id": "fox_buggy_open_door", "system": "PlayerVehicleInteractionController", "file": "03_Bildreferenzen/26_Open_City_Abenteuer/01_Fahrzeug_Einstieg_Ausstieg/01_Buggy_Tuer_Oeffnen.png"},
+    {"id": "fox_buggy_enter", "system": "PlayerVehicleInteractionController", "file": "03_Bildreferenzen/26_Open_City_Abenteuer/01_Fahrzeug_Einstieg_Ausstieg/02_Buggy_Einsteigen.png"},
+    {"id": "fox_buggy_exit", "system": "PlayerVehicleInteractionController", "file": "03_Bildreferenzen/26_Open_City_Abenteuer/01_Fahrzeug_Einstieg_Ausstieg/03_Buggy_Aussteigen.png"},
+    {"id": "fox_boat_board", "system": "PlayerVehicleInteractionController", "file": "03_Bildreferenzen/26_Open_City_Abenteuer/01_Fahrzeug_Einstieg_Ausstieg/04_Wassertaxi_Borden.png"},
+    {"id": "fox_scooter_mount", "system": "PlayerVehicleInteractionController", "file": "03_Bildreferenzen/26_Open_City_Abenteuer/01_Fahrzeug_Einstieg_Ausstieg/05_Scooter_Aufsteigen.png"},
+    {"id": "fox_scooter_dismount", "system": "PlayerVehicleInteractionController", "file": "03_Bildreferenzen/26_Open_City_Abenteuer/01_Fahrzeug_Einstieg_Ausstieg/06_Scooter_Absteigen.png"},
+    {"id": "fox_skyfin_climb_step", "system": "PlayerVehicleInteractionController", "file": "03_Bildreferenzen/26_Open_City_Abenteuer/01_Fahrzeug_Einstieg_Ausstieg/07_Skyfin_Einsteigen.png"},
+    {"id": "fox_skyfin_buckle", "system": "PlayerVehicleInteractionController", "file": "03_Bildreferenzen/26_Open_City_Abenteuer/01_Fahrzeug_Einstieg_Ausstieg/08_Skyfin_Anschnallen.png"},
+    {"id": "fox_sub_hatch_enter", "system": "PlayerVehicleInteractionController", "file": "03_Bildreferenzen/26_Open_City_Abenteuer/01_Fahrzeug_Einstieg_Ausstieg/09_U_Boot_Hatch_Einstieg.png"}
+  ],
+  "hero_acting_references": [
+    {"id": "fox_dialogue_wry", "system": "PlayerAnimator", "file": "03_Bildreferenzen/26_Open_City_Abenteuer/05_Fynnox_Heldenprofil/01_Witzige_Gespraechsgeste.png"},
+    {"id": "fox_investigate_clue", "system": "PlayerInteractionController", "file": "03_Bildreferenzen/26_Open_City_Abenteuer/05_Fynnox_Heldenprofil/02_Neugier_Scanner.png"},
+    {"id": "fox_plan_routes", "system": "PlayerInteractionController", "file": "03_Bildreferenzen/26_Open_City_Abenteuer/05_Fynnox_Heldenprofil/03_Routen_Planen.png"},
+    {"id": "fox_improvise_repair", "system": "PlayerInteractionController", "file": "03_Bildreferenzen/26_Open_City_Abenteuer/05_Fynnox_Heldenprofil/04_Improvisierte_Reparatur.png"},
+    {"id": "fox_help_kindly", "system": "QuestController", "file": "03_Bildreferenzen/26_Open_City_Abenteuer/05_Fynnox_Heldenprofil/05_Empathisch_Helfen.png"},
+    {"id": "fox_fail_recover", "system": "PlayerAnimator", "file": "03_Bildreferenzen/26_Open_City_Abenteuer/05_Fynnox_Heldenprofil/06_Fehler_und_Neustart.png"},
+    {"id": "fox_accept_responsibility", "system": "CinematicController", "file": "03_Bildreferenzen/26_Open_City_Abenteuer/05_Fynnox_Heldenprofil/07_Verantwortung_Uebernehmen.png"},
+    {"id": "fox_brief_team", "system": "DialogueController", "file": "03_Bildreferenzen/26_Open_City_Abenteuer/05_Fynnox_Heldenprofil/08_Team_Route_Erklaeren.png"},
+    {"id": "fox_hero_grounded", "system": "CinematicController", "file": "03_Bildreferenzen/26_Open_City_Abenteuer/05_Fynnox_Heldenprofil/09_Ruhiger_Heldenstand.png"}
+  ],
+  "journey_scene_references": [
+    {"id": "scene_harbor_walk_with_mira", "systems": ["WorldSimulation", "DialogueController", "NavigationController"], "file": "03_Bildreferenzen/26_Open_City_Abenteuer/02_Hafen_Flugzeug_U_Boot_Szenen/01_Hafenweg_Mit_Mira.png"},
+    {"id": "scene_water_taxi_boarding", "systems": ["DockingController", "PlayerVehicleInteractionController", "NPCActivityController"], "file": "03_Bildreferenzen/26_Open_City_Abenteuer/02_Hafen_Flugzeug_U_Boot_Szenen/02_Wassertaxi_Boarding.png"},
+    {"id": "scene_skyfin_boarding", "systems": ["DockingController", "PlayerVehicleInteractionController", "CameraController"], "file": "03_Bildreferenzen/26_Open_City_Abenteuer/02_Hafen_Flugzeug_U_Boot_Szenen/03_Skyfin_Boarding.png"},
+    {"id": "scene_bluefin_scout_boarding", "systems": ["DockingController", "PlayerVehicleInteractionController", "QuestController"], "file": "03_Bildreferenzen/26_Open_City_Abenteuer/02_Hafen_Flugzeug_U_Boot_Szenen/04_Bluefin_Scout_Einstieg.png"}
+  ],
+  "adventure_scene_references": [
+    {"id": "setpiece_rooftop_signal_race", "gameplay": ["parkour", "route_choice", "friendly_rival"], "file": "03_Bildreferenzen/26_Open_City_Abenteuer/03_Abenteuer_Mystery_Szenen/01_Dachrouten_Wettlauf.png"},
+    {"id": "setpiece_safe_vehicle_pursuit", "gameplay": ["driving", "navigation", "moving_target"], "file": "03_Bildreferenzen/26_Open_City_Abenteuer/03_Abenteuer_Mystery_Szenen/02_Fahrzeugverfolgung_Ohne_Gewalt.png"},
+    {"id": "setpiece_transit_light_puzzle", "gameplay": ["cooperative_environment_puzzle", "valves", "light_routing"], "file": "03_Bildreferenzen/26_Open_City_Abenteuer/03_Abenteuer_Mystery_Szenen/03_Transit_Raetsel_Kooperation.png"},
+    {"id": "setpiece_harbor_project_payoff", "gameplay": ["world_state_reveal", "ambient_crowd", "story_tease"], "file": "03_Bildreferenzen/26_Open_City_Abenteuer/03_Abenteuer_Mystery_Szenen/04_Hafenfest_Stadtprojekt.png"}
+  ],
+  "free_camera_continuity": {
+    "reference_folder": "03_Bildreferenzen/26_Open_City_Abenteuer/04_Freie_Kamera_Gebaeudeblock",
+    "required_near_field_elevations": ["front", "rear", "left", "right", "roof_if_camera_visible"],
+    "required_navigation_surfaces": ["sidewalk", "road_crossing", "service_alley", "plaza", "stairs_or_ladder"],
+    "background_buildings_may_use_reduced_shells": true,
+    "player_reachable_blank_facade_allowed": false
+  },
+  "world_simulation_during_dialogue_or_boarding": {
+    "near_ring": ["relevant_npcs", "visible_pedestrians", "water", "vehicle", "doors", "key_traffic"],
+    "mid_ring": ["reduced_npc_animation", "pooled_traffic", "reduced_vegetation_motion"],
+    "far_ring": ["instanced_crowd", "simplified_vehicles", "shader_motion"],
+    "freeze_entire_background": false
+  },
+  "narrative_contract": {
+    "hero_traits": ["relatable", "witty", "empathetic", "inventive", "strategic", "responsible", "flawed_but_resilient"],
+    "forbidden_shortcuts": ["copied_superhero_costume", "masked_vigilante_identity", "weapon_based_problem_solving", "violence_reward"],
+    "mystery_id": "signal_zero",
+    "mystery_system": "forgotten_city_spark_network"
+  },
+  "safety_invariants": {
+    "weapons": false,
+    "melee_combat": false,
+    "vehicle_ramming": false,
+    "pedestrian_collision_reward": false,
+    "unsafe_boarding_while_moving": false,
+    "permanent_loss_on_failure": false
+  }
+}

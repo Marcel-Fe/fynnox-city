@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1672" height="941" viewBox="0 0 1672 941">
+  <defs><style>.t{font-family:'DejaVu Sans',sans-serif;font-weight:700;fill:#fff;paint-order:stroke;stroke:#001a3d;stroke-width:5px}</style></defs>
+  <rect x="60" y="48" width="1552" height="845" rx="30" fill="none" stroke="#ff9e22" stroke-width="6" stroke-dasharray="18 12"/>
+  <rect x="82" y="650" width="490" height="220" rx="35" fill="#20c8ff" fill-opacity="0.16" stroke="#20c8ff" stroke-width="4"/>
+  <rect x="1100" y="610" width="485" height="260" rx="35" fill="#ff9e22" fill-opacity="0.16" stroke="#ff9e22" stroke-width="4"/>
+  <rect x="530" y="60" width="612" height="112" rx="28" fill="#ffffff" fill-opacity="0.12" stroke="#ffffff" stroke-width="3"/>
+  <text class="t" x="78" y="42" font-size="24">SAFE AREA 60 PX</text>
+  <text class="t" x="188" y="760" font-size="26">BEWEGUNG / KARTE</text>
+  <text class="t" x="1210" y="744" font-size="26">AKTIONEN</text>
+  <text class="t" x="690" y="125" font-size="26">MISSION / STATUS</text>
+</svg>
