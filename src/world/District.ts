@@ -28,6 +28,12 @@ export interface DistrictAnchors {
   /** Liegeplaetze des Wassertaxis: Rumpfpose, nicht der Anleger selbst. */
   moorings: { id: string; position: THREE.Vector3; heading: number; label: string }[]
   waterTaxiStart: { position: THREE.Vector3; heading: number }
+  /** Liegeplatz des Skyfin am Flugsteg. */
+  skyfinDocks: { id: string; position: THREE.Vector3; heading: number; label: string }[]
+  skyfinStart: { position: THREE.Vector3; heading: number }
+  /** Liegeplatz des Bluefin Scout am Tauchbecken. */
+  scoutDocks: { id: string; position: THREE.Vector3; heading: number; label: string }[]
+  scoutStart: { position: THREE.Vector3; heading: number }
   researchPlatform: THREE.Vector3
   stationMarineLab: THREE.Vector3
   mira: THREE.Vector3
@@ -100,6 +106,7 @@ export function buildDistrict(scene: THREE.Scene, collision: CollisionWorld): Di
   buildPromenade(b)
   const lighthouse = buildLighthouse(b)
   buildWaterTaxiStation(b)
+  buildHarborDocks(b)
   const platform = buildResearchPlatform(b)
   buildProps(b)
 
@@ -129,6 +136,25 @@ export function buildDistrict(scene: THREE.Scene, collision: CollisionWorld): Di
       },
     ],
     waterTaxiStart: { position: new THREE.Vector3(15.8, 0, 38), heading: 0 },
+    skyfinDocks: [
+      {
+        id: 'dock_skyfin',
+        position: new THREE.Vector3(-12, 0, 46.5),
+        // Backbordseite und damit die Cockpittuer zeigen zum Ponton.
+        heading: -Math.PI / 2,
+        label: 'Flugsteg',
+      },
+    ],
+    skyfinStart: { position: new THREE.Vector3(-12, 0, 46.5), heading: -Math.PI / 2 },
+    scoutDocks: [
+      {
+        id: 'dock_scout',
+        position: new THREE.Vector3(7.2, 0, 43.4),
+        heading: 0,
+        label: 'Tauchbecken',
+      },
+    ],
+    scoutStart: { position: new THREE.Vector3(7.2, 0, 43.4), heading: 0 },
     researchPlatform: new THREE.Vector3(platform.x, platform.deck, platform.z),
     // Freie Deckflaeche vor der Messhuette, sonst steckt die Station in der Wand.
     stationMarineLab: new THREE.Vector3(platform.x - 2.5, platform.deck, platform.z - 4),
@@ -488,7 +514,11 @@ function buildTransitWorks(b: WorldBuilder): {
 /** Promenade: 6,0 m freie Hauptbreite, Hafengelaender 1,1 m. */
 function buildPromenade(b: WorldBuilder): void {
   b.box({ x: 0, y: 0, z: 29, w: 120, h: CURB_HEIGHT, d: 6, color: COLORS.concrete })
-  b.railing({ x: 0, z: 32.2, y: CURB_HEIGHT, length: 120, axis: 'x', color: COLORS.metal })
+  // Das Hafengelaender laesst an der Wassertaxi-Station eine 6 m breite Durchfahrt
+  // frei - sonst waeren Dock, Werftstege und alle Wasserfahrzeuge zu Fuss
+  // unerreichbar und nur per Teleport zu bespielen.
+  b.railing({ x: -26.5, z: 32.2, y: CURB_HEIGHT, length: 67, axis: 'x', color: COLORS.metal })
+  b.railing({ x: 36.5, z: 32.2, y: CURB_HEIGHT, length: 47, axis: 'x', color: COLORS.metal })
   for (let x = -50; x <= 50; x += 10) {
     b.box({ x, y: CURB_HEIGHT, z: 26.6, w: 0.3, h: 3.2, d: 0.3, color: COLORS.metal })
     b.box({ x, y: 3.35 + CURB_HEIGHT, z: 26.6, w: 0.9, h: 0.25, d: 0.5, color: COLORS.gold, collide: false })
@@ -520,6 +550,37 @@ function buildWaterTaxiStation(b: WorldBuilder): void {
   b.box({ x, y: -0.45, z: 37.75, w: 8, h: 0.6, d: 7.5, color: COLORS.wood })
   b.railing({ x, z: 41.3, y: 0.15, length: 8, axis: 'x', color: COLORS.metal })
   b.box({ x: x - 3, y: 0.15, z: 36, w: 0.4, h: 1.2, d: 0.4, color: COLORS.coral })
+}
+
+/**
+ * Werftstege westlich der Wassertaxi-Station: Flugsteg fuer das Skyfin und
+ * Tauchbecken fuer den Bluefin Scout. Beide Pontons liegen auf 0,15 m wie das
+ * schwimmende Dock, damit man ohne Stufe hinueberlaeuft.
+ */
+function buildHarborDocks(b: WorldBuilder): void {
+  const top = -0.45
+  const thickness = 0.6
+  // Laengssteg vom schwimmenden Dock (x = 6) nach Westen.
+  b.box({ x: -5, y: top, z: 37.5, w: 22, h: thickness, d: 3, color: COLORS.wood })
+  // Flugsteg-Ponton, Nordkante bei z = 44: davor liegt das Skyfin.
+  b.box({ x: -12, y: top, z: 41.5, w: 10, h: thickness, d: 5, color: COLORS.wood })
+  b.railing({ x: -16.9, z: 41.5, y: 0.15, length: 5, axis: 'z', color: COLORS.metal })
+  // Windsack als Landmarke fuer den Anflug.
+  b.box({ x: -16.4, y: 0.15, z: 39.6, w: 0.25, h: 4.2, d: 0.25, color: COLORS.metal })
+  b.box({ x: -15.6, y: 4.05, z: 39.6, w: 1.6, h: 0.5, d: 0.5, color: COLORS.coral, collide: false })
+  // Tauchbecken-Ponton, Ostkante bei x = 5: daneben liegt der Scout.
+  b.box({ x: 0.5, y: top, z: 42, w: 9, h: thickness, d: 6, color: COLORS.wood })
+  b.railing({ x: 0.5, z: 44.9, y: 0.15, length: 9, axis: 'x', color: COLORS.metal })
+  b.railing({ x: -3.9, z: 42, y: 0.15, length: 6, axis: 'z', color: COLORS.metal })
+  // Poller und Geraeteschuppen der Werft.
+  for (const [px, pz] of [
+    [-7.4, 39.6],
+    [4.4, 39.6],
+  ]) {
+    b.box({ x: px, y: 0.15, z: pz, w: 0.4, h: 1.0, d: 0.4, color: COLORS.coral })
+  }
+  b.box({ x: -2.5, y: 0.15, z: 43.4, w: 2.4, h: 2.4, d: 2.4, color: COLORS.cream })
+  b.box({ x: -2.5, y: 2.55, z: 43.4, w: 2.8, h: 0.3, d: 2.8, color: COLORS.roof })
 }
 
 /**

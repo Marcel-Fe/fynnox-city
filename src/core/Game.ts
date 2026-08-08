@@ -9,6 +9,7 @@ import { OrbitCameraRig } from '../camera/OrbitCameraRig'
 import { InputManager } from '../input/InputManager'
 import { CitySpark } from '../vehicle/CitySpark'
 import { BluefinWaterTaxi } from '../vehicle/BluefinWaterTaxi'
+import { Skyfin } from '../vehicle/Skyfin'
 import { BoardingController } from '../vehicle/BoardingController'
 import type { BoardableVehicle } from '../vehicle/BoardableVehicle'
 import { DialoguePartner, DialogueSystem } from '../dialogue/DialogueSystem'
@@ -21,7 +22,7 @@ import { AmbientNPCSystem } from '../npc/AmbientNPCSystem'
 import { HUD, DEFAULT_SETTINGS, type MapMarker, type Settings } from '../ui/HUD'
 import { SaveGame, type SaveData } from '../save/SaveGame'
 import { inputContext } from '../state/InputContext'
-import { resolveSockets } from '../vehicle/BoardableVehicle'
+import { controlCameraDistance, resolveSockets } from '../vehicle/BoardableVehicle'
 import { manifestSummary } from '../contracts/manifests'
 import type { InputContextId, UiActionId } from '../contracts/types'
 
@@ -52,6 +53,7 @@ export class Game {
   private readonly player: PlayerController
   private readonly vehicle: CitySpark
   private readonly waterTaxi: BluefinWaterTaxi
+  private readonly skyfin: Skyfin
   private readonly vehicles: BoardableVehicle[]
   private readonly boarding: BoardingController
   private readonly dialogue: DialogueSystem
@@ -100,7 +102,9 @@ export class Game {
     this.vehicle.place(this.anchors.vehicleStart.position, this.anchors.vehicleStart.heading)
     this.waterTaxi = new BluefinWaterTaxi(this.collision, this.scene, this.anchors.moorings)
     this.waterTaxi.place(this.anchors.waterTaxiStart.position, this.anchors.waterTaxiStart.heading)
-    this.vehicles = [this.vehicle, this.waterTaxi]
+    this.skyfin = new Skyfin(this.collision, this.scene, this.anchors.skyfinDocks)
+    this.skyfin.place(this.anchors.skyfinStart.position, this.anchors.skyfinStart.heading)
+    this.vehicles = [this.vehicle, this.waterTaxi, this.skyfin]
 
     this.hud = new HUD(container, this.input, {
       onSettingsChanged: (settings) => this.applySettings(settings),
@@ -218,7 +222,10 @@ export class Game {
         this.vehicle.place(new THREE.Vector3(x, y, z), heading),
       placeWaterTaxi: (x: number, y: number, z: number, heading: number) =>
         this.waterTaxi.place(new THREE.Vector3(x, y, z), heading),
+      placeSkyfin: (x: number, y: number, z: number, heading: number) =>
+        this.skyfin.place(new THREE.Vector3(x, y, z), heading),
       press: (button: string) => this.input.press(button as never),
+      release: (button: string) => this.input.release(button as never),
       setStick: (x: number, y: number) => this.input.setStick(x, y),
       addLook: (x: number, y: number) => this.rig.addLook(x, y),
       setCameraYaw: (yaw: number) => {
@@ -234,6 +241,11 @@ export class Game {
         vehicle: this.vehicle.position.toArray(),
         waterTaxi: this.waterTaxi.position.toArray(),
         waterTaxiDocked: this.waterTaxi.dockedAt?.id ?? null,
+        skyfin: this.skyfin.position.toArray(),
+        skyfinDocked: this.skyfin.dockedAt?.id ?? null,
+        skyfinAirborne: this.skyfin.isAirborne,
+        skyfinPropeller: this.skyfin.propellerRate,
+        skyfinRoll: this.skyfin.roll,
         activeVehicle: this.boarding.vehicle?.id ?? null,
         harborTask: this.harborTask,
         dialogue: this.dialogue.isActive,
@@ -375,7 +387,7 @@ export class Game {
     for (const vehicle of this.vehicles) {
       if (vehicle !== active) vehicle.settle(delta)
     }
-    const base = active.id === 'vehicle_bluefin_water_taxi' ? 10 : 7.5
+    const base = controlCameraDistance(active.id)
     this.rig.setDistance(base + Math.min(3, Math.abs(active.speed) * 0.25))
     if (this.input.consume('enterExit')) this.boarding.requestExit()
   }
@@ -604,6 +616,7 @@ export class Game {
     const markers: MapMarker[] = [
       { x: this.vehicle.position.x, z: this.vehicle.position.z, color: '#F2B441', shape: 'square' },
       { x: this.waterTaxi.position.x, z: this.waterTaxi.position.z, color: '#9FD8E0', shape: 'square' },
+      { x: this.skyfin.position.x, z: this.skyfin.position.z, color: '#F3E3C8', shape: 'triangle' },
       {
         x: this.anchors.stationCityProject.x,
         z: this.anchors.stationCityProject.z,
@@ -685,6 +698,12 @@ export class Game {
         z: this.waterTaxi.position.z,
         heading: this.waterTaxi.heading,
       },
+      skyfin_transform: {
+        x: this.skyfin.position.x,
+        y: this.skyfin.position.y,
+        z: this.skyfin.position.z,
+        heading: this.skyfin.heading,
+      },
       harbor_task: this.harborTask,
       door_or_hatch_state: (this.boarding.vehicle ?? this.vehicle).entryPartState,
       active_input_context: inputContext.is('ctx_menu') ? this.contextBeforeMenu : inputContext.active,
@@ -729,6 +748,12 @@ export class Game {
           data.water_taxi_transform.z,
         ),
         data.water_taxi_transform.heading,
+      )
+    }
+    if (data.skyfin_transform) {
+      this.skyfin.place(
+        new THREE.Vector3(data.skyfin_transform.x, data.skyfin_transform.y, data.skyfin_transform.z),
+        data.skyfin_transform.heading,
       )
     }
     this.harborTask = data.harbor_task ?? 'locked'

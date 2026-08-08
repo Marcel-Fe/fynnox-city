@@ -18,16 +18,42 @@ export interface BoardableVehicle {
   readonly seatOffset: THREE.Vector3
   /** Anzeigename fuer HUD und Meldungen. */
   readonly label: string
+  /** Rollwinkel um die Laengsachse - Grundlage von cam_vehicle_air/roll_compensation. */
+  readonly roll?: number
+  /** Beschriftung der Kontextknoepfe, wenn das Fahrzeug eine dritte Achse hat. */
+  readonly verticalLabels?: { up: string; down: string }
   hasSocket(name: string): boolean
   socketWorld(name: string, target?: THREE.Vector3): THREE.Vector3
   setEntryPartOpen(open: boolean): void
   /** Beantwortet die entry_conditions aus dem Manifest. */
   checkEntryCondition(condition: string): boolean
+  /**
+   * Grund, warum ueberhaupt kein Ausstieg zulaessig ist - unabhaengig vom Anker.
+   * Ein getauchtes U-Boot und ein fliegendes Flugzeug haben keinen gueltigen
+   * Ausstieg, auch wenn zufaellig ein Deck ueber ihnen liegt. null heisst erlaubt.
+   */
+  exitBlockedReason?(): string | null
   place(position: THREE.Vector3, heading: number): void
   drive(delta: number, throttle: number, steer: number, brake: boolean): void
+  /** Dritte Steuerachse: Steigen/Sinken beim Flugzeug, Auf-/Abtauchen beim U-Boot. */
+  setVerticalInput?(value: number): void
   update(delta: number): void
   /** Ruhezustand, wenn niemand faehrt. */
   settle(delta: number): void
+}
+
+/**
+ * Kameraabstand im Fahrbetrieb. Ein Flugzeug braucht mehr Luft als ein Buggy;
+ * die Zuordnung steht hier einmal statt als id-Abfrage in Controller und Game.
+ */
+const CONTROL_CAMERA_DISTANCE: Record<string, number> = {
+  vehicle_bluefin_water_taxi: 10,
+  vehicle_bluefin_scout: 11,
+  vehicle_skyfin: 14,
+}
+
+export function controlCameraDistance(vehicleId: string): number {
+  return CONTROL_CAMERA_DISTANCE[vehicleId] ?? 7.5
 }
 
 export interface ResolvedSockets {

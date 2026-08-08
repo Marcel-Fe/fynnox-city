@@ -5,7 +5,7 @@ import { inputContext } from '../state/InputContext'
 import type { CollisionWorld } from '../core/CollisionWorld'
 import type { OrbitCameraRig } from '../camera/OrbitCameraRig'
 import type { PlayerController } from '../player/PlayerController'
-import { resolveSockets, type BoardableVehicle } from './BoardableVehicle'
+import { controlCameraDistance, resolveSockets, type BoardableVehicle } from './BoardableVehicle'
 
 export type BoardingPhase = 'on_foot' | 'entering' | 'seated' | 'exiting'
 
@@ -161,7 +161,7 @@ export class BoardingController {
         enter: () => {
           this.phase = 'seated'
           this.rig.blendTo(spec.control_camera)
-          this.rig.setDistance(vehicle.id === 'vehicle_bluefin_water_taxi' ? 10 : 7.5)
+          this.rig.setDistance(controlCameraDistance(vehicle.id))
           this.onEvent(`${vehicle.label} bereit.`)
         },
       },
@@ -186,6 +186,16 @@ export class BoardingController {
     const policy = contract.safe_exit_policy
     const sockets = resolveSockets(vehicle.id)
 
+    // Manche Fahrzeuge haben zustandsabhaengig ueberhaupt keinen Ausstieg:
+    // ein getauchtes U-Boot, ein Flugzeug in der Luft. Das faellt vor dem
+    // Ankersweep auf, sonst wuerde ein zufaellig darueberliegendes Deck reichen.
+    const blocked = vehicle.exitBlockedReason?.() ?? null
+    if (blocked) {
+      this.lastDenial = blocked
+      this.onEvent(blocked)
+      return false
+    }
+
     // find_safe_exit: Kapselsweep an Primaer-, dann Alternativanker.
     const candidates = policy.use_alternate_exit_when_blocked ? sockets.exits : sockets.exits.slice(0, 1)
     let chosen: THREE.Vector3 | null = null
@@ -206,10 +216,7 @@ export class BoardingController {
 
     if (!chosen) {
       // deny_exit_when_all_anchors_blocked: niemals durch Geometrie teleportieren.
-      this.lastDenial =
-        vehicle.id === 'vehicle_bluefin_water_taxi'
-          ? 'Kein Anleger in Reichweite - langsam an eine Anlegestelle heranfahren.'
-          : 'Ausstieg blockiert - Fahrzeug etwas weiter weg abstellen.'
+      this.lastDenial = EXIT_DENIAL[vehicle.id] ?? 'Ausstieg blockiert - Fahrzeug etwas weiter weg abstellen.'
       this.onEvent(this.lastDenial)
       return false
     }
@@ -377,8 +384,21 @@ export class BoardingController {
   }
 }
 
+/** Klartext zu den entry_conditions des Fahrzeugmanifests. */
 const DENIAL_TEXT: Record<string, string> = {
   vehicle_docked: 'Das Boot liegt nicht am Anleger.',
   ramp_deployed: 'Die Rampe ist noch nicht ausgefahren.',
   boarding_lane_clear: 'Der Einstieg ist versperrt.',
+  vehicle_docked_or_parked: 'Das Skyfin liegt nicht am Steg.',
+  propeller_stopped: 'Der Propeller dreht noch - einen Moment warten.',
+  cockpit_clear: 'Vor dem Cockpit ist kein Platz.',
+  pressure_equalized: 'Der Druck ist noch nicht ausgeglichen - erst auftauchen.',
+  hatch_unlocked: 'Die Luke ist noch verriegelt.',
+}
+
+/** Begruendung, wenn kein einziger Ausstiegsanker taugt. */
+const EXIT_DENIAL: Record<string, string> = {
+  vehicle_bluefin_water_taxi: 'Kein Anleger in Reichweite - langsam an eine Anlegestelle heranfahren.',
+  vehicle_skyfin: 'Kein Steg unter dem Schwimmer - langsam an den Flugsteg heranfahren.',
+  vehicle_bluefin_scout: 'Kein Steg in Reichweite - langsam an das Tauchbecken heranfahren.',
 }
