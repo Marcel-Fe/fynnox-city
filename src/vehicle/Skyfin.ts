@@ -17,6 +17,10 @@ const REVERSE_SPEED = 2
 const TAKEOFF_SPEED = 9
 const CLIMB_RATE = 7
 const SINK_RATE = 4
+/** Auslaufzeit des Propellers: rund vier Sekunden von voller Drehzahl auf null.
+ *  Lang genug, dass der Wiedereinstieg direkt nach dem Abstellen lesbar
+ *  verweigert wird, kurz genug, dass Warten nicht wie ein Fehler wirkt. */
+const PROPELLER_SPINDOWN = 0.25
 const DOCK_RADIUS = 8
 const DOCK_SPEED = 1.4
 /** Halbmasse von Rumpf und Schwimmern, ohne die Fluegel. */
@@ -272,7 +276,7 @@ export class Skyfin implements BoardableVehicle {
     this.propeller +=
       demand > this.propeller
         ? Math.min(demand - this.propeller, delta * 2.5)
-        : -Math.min(this.propeller - demand, delta * 0.12)
+        : -Math.min(this.propeller - demand, delta * PROPELLER_SPINDOWN)
 
     const speedFactor = THREE.MathUtils.clamp(Math.abs(this.speed) / 10, 0, 1)
     this.steer += (steerInput - this.steer) * Math.min(1, delta * 3.5)
@@ -325,7 +329,7 @@ export class Skyfin implements BoardableVehicle {
   settle(delta: number): void {
     this.vertical = 0
     this.speed -= Math.sign(this.speed) * Math.min(Math.abs(this.speed), 2.2 * delta)
-    this.propeller = Math.max(0, this.propeller - delta * 0.12)
+    this.propeller = Math.max(0, this.propeller - delta * PROPELLER_SPINDOWN)
     this.bank += (0 - this.bank) * Math.min(1, delta * 2)
     const floor = this.floorAt(this.position.x, this.position.z)
     if (this.position.y > floor) this.position.y = Math.max(floor, this.position.y - SINK_RATE * delta)

@@ -1,6 +1,8 @@
 node_modules/
 dist/
 .vite/
+# Abnahme-Screenshots sind Laufergebnisse, keine Quellen.
+shots/
 *.local
 .DS_Store
 Thumbs.db
