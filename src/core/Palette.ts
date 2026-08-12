@@ -24,9 +24,23 @@ export const COLORS = {
   water: '#1C7E93',
   foliage: '#5C9E63',
   metal: '#8E9AA6',
-  fynnoxFur: '#E07A3C',
+  // Fynnox: Fell, Gesicht und Outfit sind gesperrte Designvorgaben des Pakets
+  // (03_Bildreferenzen/03_Fynnox_Turnaround). Werte hier abgelesen, nicht erfunden.
+  fynnoxFur: '#E0703A',
+  fynnoxFurDark: '#B04E23',
   fynnoxBelly: '#F7E4CB',
   fynnoxOutfit: '#2C6E7F',
+  fynnoxJacket: '#33465C',
+  fynnoxJacketDark: '#253445',
+  fynnoxShirt: '#EFE4CE',
+  fynnoxScarf: '#1E7FC2',
+  fynnoxPants: '#3C4249',
+  fynnoxLeather: '#7A4526',
+  fynnoxBrass: '#C08A3E',
+  fynnoxKnit: '#8A8F96',
+  fynnoxEye: '#2E9BD8',
+  fynnoxDark: '#241A16',
+  fynnoxGlass: '#BFE0EA',
   sparkBody: '#F2B441',
 } as const
 
