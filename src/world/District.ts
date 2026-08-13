@@ -191,7 +191,7 @@ export function buildDistrict(scene: THREE.Scene, collision: CollisionWorld): Di
 
 function buildTerrain(b: WorldBuilder): void {
   // Landflaeche, Unterkante tief genug, damit man nicht unter die Stadt faellt.
-  b.box({ x: 0, y: -4, z: -13, w: 160, h: 4, d: 94, color: COLORS.concrete })
+  b.box({ x: 0, y: -4, z: -13, w: 160, h: 4, d: 94, color: COLORS.paving })
   // Hafenbecken: Boden liegt 3 m unter Kaikante.
   b.box({ x: 0, y: -6, z: 72, w: 160, h: 3, d: 80, color: COLORS.navyMid })
   // Kaimauer bei z = 34 (Paket: Kaimauer/Wasserkante als 12-m-Modul).
@@ -205,7 +205,14 @@ function buildRoads(b: WorldBuilder): void {
   const walk = COLORS.concrete
 
   // Hauptstrasse Ost-West: zwei Fahrspuren a 3,0 m bei z = -12.
-  b.box({ x: 0, y: -0.02, z: -12, w: 160, h: 0.02, d: 6, color: road, collide: false })
+  // Die Fahrbahn liegt 1 cm ueber dem Gelaende. Vorher lag ihre Oberkante exakt
+  // auf 0 und damit koplanar mit der Gelaendeoberflaeche - der Asphalt wurde
+  // weggeblendet, die Strasse war schlicht unsichtbar.
+  b.box({ x: 0, y: 0, z: -12, w: 160, h: 0.01, d: 6, color: road, collide: false })
+  // Randlinien der Fahrbahn; die Mitte bleibt frei, dort liegt das Gleis.
+  for (const edge of [-14.88, -9.12]) {
+    b.box({ x: 0, y: 0, z: edge, w: 160, h: 0.02, d: 0.14, color: COLORS.cream, collide: false })
+  }
   // Gehwege je 2,0 m mit 0,15 m Bordstein.
   b.box({ x: 0, y: 0, z: -16, w: 160, h: CURB_HEIGHT, d: 2, color: walk })
   b.box({ x: 0, y: 0, z: -8, w: 160, h: CURB_HEIGHT, d: 2, color: walk })
@@ -218,15 +225,45 @@ function buildRoads(b: WorldBuilder): void {
   }
 
   // Querstrasse Nord-Sued zum Hafen.
-  b.box({ x: 0, y: -0.02, z: 12, w: 6, h: 0.02, d: 48, color: road, collide: false })
+  b.box({ x: 0, y: 0, z: 12, w: 6, h: 0.01, d: 48, color: road, collide: false })
+  for (const edge of [-2.88, 2.88]) {
+    b.box({ x: edge, y: 0, z: 12, w: 0.14, h: 0.02, d: 48, color: COLORS.cream, collide: false })
+  }
+  // Gestrichelte Mittellinie, Strich 3 m, Luecke 3 m.
+  for (let z = -10; z < 36; z += 6) {
+    b.box({ x: 0, y: 0, z, w: 0.14, h: 0.02, d: 3, color: COLORS.cream, collide: false })
+  }
   b.box({ x: -4, y: 0, z: 12, w: 2, h: CURB_HEIGHT, d: 48, color: walk })
   b.box({ x: 4, y: 0, z: 12, w: 2, h: CURB_HEIGHT, d: 48, color: walk })
 
   // Zufahrt zur Foxtail Garage.
-  b.box({ x: -30, y: -0.02, z: -15, w: 8, h: 0.02, d: 8, color: road, collide: false })
+  b.box({ x: -30, y: 0, z: -15, w: 8, h: 0.01, d: 8, color: road, collide: false })
 
-  // Platzflaeche zwischen Strasse und Promenade.
+  // Platzflaeche zwischen Strasse und Promenade, mit Plattenfugen im 4-m-Raster.
   b.box({ x: 0, y: 0, z: 2, w: 44, h: CURB_HEIGHT, d: 14, color: walk })
+  paveJoints(b, { x: 0, z: 2, w: 44, d: 14, y: CURB_HEIGHT, spacing: 4 })
+}
+
+/**
+ * Plattenfugen als duenne Linien auf einer Bodenflaeche. Ohne sie liest jede
+ * grosse Flaeche als eine einzige leere Platte - das ist der Haupteindruck,
+ * den die Bildreferenzen gerade nicht haben.
+ */
+function paveJoints(
+  b: WorldBuilder,
+  o: { x: number; z: number; w: number; d: number; y: number; spacing: number },
+): void {
+  const joint = 0.06
+  const countX = Math.floor(o.w / o.spacing)
+  for (let i = 1; i < countX; i++) {
+    const x = o.x - o.w / 2 + i * o.spacing
+    b.box({ x, y: o.y, z: o.z, w: joint, h: 0.008, d: o.d, color: COLORS.pavingJoint, collide: false })
+  }
+  const countZ = Math.floor(o.d / o.spacing)
+  for (let i = 1; i < countZ; i++) {
+    const z = o.z - o.d / 2 + i * o.spacing
+    b.box({ x: o.x, y: o.y, z, w: o.w, h: 0.008, d: joint, color: COLORS.pavingJoint, collide: false })
+  }
 }
 
 /** Foxtail Garage: 16 x 12 m, 8 m hoch, Rolltor 5,0 x 4,2 m, Loft auf 4,0 m. */
@@ -514,6 +551,7 @@ function buildTransitWorks(b: WorldBuilder): {
 /** Promenade: 6,0 m freie Hauptbreite, Hafengelaender 1,1 m. */
 function buildPromenade(b: WorldBuilder): void {
   b.box({ x: 0, y: 0, z: 29, w: 120, h: CURB_HEIGHT, d: 6, color: COLORS.concrete })
+  paveJoints(b, { x: 0, z: 29, w: 120, d: 6, y: CURB_HEIGHT, spacing: 3 })
   // Das Hafengelaender laesst an der Wassertaxi-Station eine 6 m breite Durchfahrt
   // frei - sonst waeren Dock, Werftstege und alle Wasserfahrzeuge zu Fuss
   // unerreichbar und nur per Teleport zu bespielen.

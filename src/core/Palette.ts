@@ -17,6 +17,10 @@ export const COLORS = {
   wallCoral: '#E4784F',
   groundTeal: '#2E8C93',
   concrete: '#C6C7BC',
+  /** Naturstein des Stadtbodens - waermer als der Gehwegbeton, damit sich
+   *  Platzflaeche, Gehweg und Fahrbahn ueberhaupt voneinander abheben. */
+  paving: '#CFC5AC',
+  pavingJoint: '#AFA791',
   asphalt: '#3B4652',
   roof: '#2A3B4C',
   wood: '#B98A52',
