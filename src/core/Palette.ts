@@ -47,7 +47,12 @@ export const COLORS = {
   fynnoxEye: '#2E9BD8',
   fynnoxDark: '#241A16',
   fynnoxGlass: '#BFE0EA',
-  sparkBody: '#F2B441',
+  // City Spark nach 09_Fahrzeuge/01_City_Spark_Elektrobuggy: Teal-Karosserie mit
+  // orangem Zierstreifen und orangen Felgen, nicht gelb.
+  sparkBody: '#2C868F',
+  sparkBodyDark: '#1F646D',
+  sparkTrim: '#E8842E',
+  tyre: '#2B3138',
 } as const
 
 export type MaterialKey = keyof typeof COLORS
