@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { COLORS } from '../core/Palette'
+import { COLORS, lookUniforms } from '../core/Palette'
 
 /**
  * Tageszeit, Licht und Himmel. Sechs Lichtzustaende aus
@@ -20,7 +20,9 @@ export class SkySystem {
   private scannerMode = false
 
   constructor(private readonly scene: THREE.Scene) {
-    this.hemi = new THREE.HemisphereLight('#BFE4F5', '#8A7F6A', 1.15)
+    // Kuehle Bodenaufhellung gegen warme Sonne: der Farbkontrast zwischen
+    // besonnter und beschatteter Flaeche traegt den Look der Bildreferenzen.
+    this.hemi = new THREE.HemisphereLight('#BFE4F5', '#5E7392', 1.15)
     scene.add(this.hemi)
 
     this.sun = new THREE.DirectionalLight('#FFF0D2', 1.5)
@@ -64,7 +66,9 @@ export class SkySystem {
     this.dome.frustumCulled = false
     scene.add(this.dome)
 
-    scene.fog = new THREE.Fog(new THREE.Color(COLORS.cream), 90, 260)
+    // Nebel erst spaet einsetzen lassen: vorher lag schon das Hafenbecken darin
+    // und verlor seine Farbe.
+    scene.fog = new THREE.Fog(new THREE.Color(COLORS.cream), 140, 330)
     this.apply()
   }
 
@@ -103,8 +107,14 @@ export class SkySystem {
     const noon = new THREE.Color('#FFF6E0')
     const sunColor = warm.clone().lerp(noon, THREE.MathUtils.smoothstep(height, 0.15, 0.7))
     this.sun.color.copy(sunColor)
-    this.sun.intensity = 0.6 + height * 1.1
-    this.hemi.intensity = 0.55 + height * 0.7
+    // Sonne und Himmelslicht zusammen lagen bei rund 2,7 - damit landete jede
+    // besonnte Flaeche in der Schulter der ACES-Kurve und die Szene wusch aus.
+    // Weniger Fuelllicht heisst tiefere Schatten und ueberhaupt erst Kontrast,
+    // in dem die Toon-Abstufung sichtbar wird.
+    this.sun.intensity = 0.45 + height * 0.95
+    // Genug Himmelslicht, dass Schattenseiten farbig bleiben statt schwarz
+    // zuzulaufen - rund 3:1 zwischen besonnt und beschattet.
+    this.hemi.intensity = 0.3 + height * 0.4
 
     this.uniforms.uTop.value.set('#2F6D9E').lerp(new THREE.Color('#7FC7E8'), height)
     this.uniforms.uBottom.value.set('#FFB27A').lerp(new THREE.Color('#FFF3D8'), height)
@@ -118,7 +128,11 @@ export class SkySystem {
       this.hemi.color.set('#7FE3F5')
     } else {
       this.hemi.color.set('#BFE4F5')
+      this.hemi.groundColor.set('#5E7392')
       fog.color.copy(this.uniforms.uBottom.value)
     }
+    // Das Streiflicht kommt aus dem Himmel, nicht von der Sonne - es zeichnet
+    // die Silhouette gegen den Hintergrund, in den die Figur gestellt ist.
+    lookUniforms.uRimColor.value.copy(this.uniforms.uTop.value)
   }
 }
