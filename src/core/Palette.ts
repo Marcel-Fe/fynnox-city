@@ -27,6 +27,8 @@ export const COLORS = {
   glass: '#9FD8E0',
   water: '#1C7E93',
   foliage: '#5C9E63',
+  foliageDark: '#3F7A4B',
+  bloom: '#E4708F',
   metal: '#8E9AA6',
   // Fynnox: Fell, Gesicht und Outfit sind gesperrte Designvorgaben des Pakets
   // (03_Bildreferenzen/03_Fynnox_Turnaround). Werte hier abgelesen, nicht erfunden.

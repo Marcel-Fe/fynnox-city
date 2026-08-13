@@ -109,6 +109,7 @@ export function buildDistrict(scene: THREE.Scene, collision: CollisionWorld): Di
   buildHarborDocks(b)
   const platform = buildResearchPlatform(b)
   buildProps(b)
+  buildStreetDressing(b)
 
   b.finish()
 
@@ -657,6 +658,138 @@ function buildResearchPlatform(b: WorldBuilder): { x: number; z: number; deck: n
   b.box({ x: x - 3.5, y: deck + 0.8, z: z - 2, w: 0.9, h: 0.6, d: 0.9, color: COLORS.coral })
 
   return { x, z, deck }
+}
+
+/** Strassenlaterne: Sockel und Mast tragen, Ausleger und Leuchte nicht. */
+function streetLamp(b: WorldBuilder, x: number, z: number): void {
+  const base = CURB_HEIGHT
+  b.box({ x, y: base, z, w: 0.34, h: 0.3, d: 0.34, color: COLORS.navy })
+  b.box({ x, y: base + 0.3, z, w: 0.16, h: 3.5, d: 0.16, color: COLORS.navy })
+  b.box({ x, y: base + 3.8, z, w: 0.46, h: 0.1, d: 0.46, color: COLORS.navy, collide: false })
+  b.box({ x, y: base + 3.9, z, w: 0.36, h: 0.32, d: 0.36, color: COLORS.gold, collide: false })
+  b.box({ x, y: base + 4.22, z, w: 0.44, h: 0.1, d: 0.44, color: COLORS.navy, collide: false })
+}
+
+/** Strassenbaum im Pflanzbeet - in den Referenzen steht kaum ein Baum nackt. */
+function plantedTree(b: WorldBuilder, x: number, z: number): void {
+  const base = CURB_HEIGHT
+  b.box({ x, y: base, z, w: 1.5, h: 0.32, d: 1.5, color: COLORS.concrete })
+  b.box({ x, y: base + 0.32, z, w: 1.25, h: 0.1, d: 1.25, color: COLORS.foliageDark, collide: false })
+  for (const [dx, dz] of [
+    [-0.4, -0.36],
+    [0.36, -0.4],
+    [-0.36, 0.4],
+    [0.4, 0.33],
+  ]) {
+    b.box({ x: x + dx, y: base + 0.42, z: z + dz, w: 0.32, h: 0.14, d: 0.32, color: COLORS.bloom, collide: false })
+  }
+  b.box({ x, y: base + 0.32, z, w: 0.3, h: 2.5, d: 0.3, color: COLORS.wood })
+  b.box({ x, y: base + 2.6, z, w: 3.0, h: 1.5, d: 3.0, color: COLORS.foliage, collide: false })
+  b.box({ x, y: base + 3.7, z, w: 2.1, h: 1.1, d: 2.1, color: COLORS.foliageDark, collide: false })
+}
+
+/** Gestreifte Markise ueber einem Schaufenster. */
+function awning(b: WorldBuilder, cx: number, z: number, width: number, faceSouth: boolean): void {
+  const depth = 2.0
+  const dz = faceSouth ? depth / 2 : -depth / 2
+  const segments = 6
+  for (let i = 0; i < segments; i++) {
+    b.box({
+      x: cx - width / 2 + (width / segments) * (i + 0.5),
+      y: 3.15,
+      z: z + dz,
+      w: width / segments,
+      h: 0.14,
+      d: depth,
+      color: i % 2 === 0 ? COLORS.coral : COLORS.cream,
+      collide: false,
+    })
+  }
+  // Bordkante und zwei Streben.
+  b.box({ x: cx, y: 2.95, z: z + dz * 2, w: width, h: 0.22, d: 0.1, color: COLORS.cream, collide: false })
+  for (const side of [-1, 1]) {
+    b.box({
+      x: cx + (side * width) / 2,
+      y: 3.15,
+      z: z + dz,
+      w: 0.08,
+      h: 0.1,
+      d: depth,
+      color: COLORS.metal,
+      collide: false,
+    })
+  }
+}
+
+/** Segelboot im Hafenbecken - reine Kulisse, kein Hindernis fuer die Boote. */
+function sailBoat(b: WorldBuilder, x: number, z: number, rot: number): void {
+  const y = -0.55
+  b.box({ x, y, z, w: 1.8, h: 0.55, d: 5.2, color: COLORS.cream, rotY: rot, collide: false })
+  b.box({ x, y: y + 0.55, z, w: 1.3, h: 0.18, d: 3.6, color: COLORS.navyMid, rotY: rot, collide: false })
+  b.box({ x, y: y + 0.7, z, w: 0.14, h: 5.2, d: 0.14, color: COLORS.metal, rotY: rot, collide: false })
+  b.box({ x, y: y + 1.3, z, w: 0.1, h: 3.4, d: 2.2, color: COLORS.cream, rotY: rot, collide: false })
+}
+
+/** Abgestelltes Rad am Bordstein. */
+function bicycle(b: WorldBuilder, x: number, z: number, rot: number): void {
+  const y = CURB_HEIGHT
+  for (const dz of [-0.55, 0.55]) {
+    b.box({ x, y, z: z + dz, w: 0.08, h: 0.66, d: 0.66, color: COLORS.navy, rotY: rot, collide: false })
+  }
+  b.box({ x, y: y + 0.45, z, w: 0.08, h: 0.1, d: 1.2, color: COLORS.coral, rotY: rot, collide: false })
+  b.box({ x, y: y + 0.55, z: z - 0.5, w: 0.5, h: 0.08, d: 0.08, color: COLORS.navy, rotY: rot, collide: false })
+  b.box({ x, y: y + 0.62, z: z + 0.35, w: 0.22, h: 0.08, d: 0.34, color: COLORS.navy, rotY: rot, collide: false })
+}
+
+/**
+ * Strassenmoeblierung. Die Bildreferenzen zeigen keine leeren Flaechen -
+ * Laternen, Baumbeete, Markisen und Kuebel fuellen jeden Gehweg. Alles laeuft
+ * ueber WorldBuilder und landet damit in den bestehenden Material-Batches;
+ * nur Masten und Stammbeete tragen Kollision, der Rest ist reine Kulisse.
+ */
+function buildStreetDressing(b: WorldBuilder): void {
+  // Laternen stehen an der Aussenkante der 2-m-Gehwege: schlank genug, dass der
+  // Gehweg begehbar bleibt, und weit genug von den NPC-Routen entfernt - die
+  // Ambient-NPCs laufen ohne Kollision, wuerden also mitten durch ein Beet gehen.
+  for (let x = -56; x <= 56; x += 16) {
+    for (const z of [-16.7, -7.3]) streetLamp(b, x, z)
+  }
+  for (let z = -2; z <= 30; z += 11) {
+    for (const x of [-4.7, 4.7]) streetLamp(b, x, z)
+  }
+  // Baeume nur auf den breiten Flaechen: Promenade und Platz.
+  for (let x = -45; x <= 45; x += 15) plantedTree(b, x, 30.6)
+  for (const x of [-16, -10, 12, 18]) plantedTree(b, x, 7.6)
+  // Blumenkuebel zwischen den Baeumen auf der Promenade.
+  for (let x = -37.5; x <= 37.5; x += 15) {
+    b.box({ x, y: CURB_HEIGHT, z: 30.8, w: 1.2, h: 0.7, d: 1.2, color: COLORS.wood })
+    b.box({
+      x,
+      y: CURB_HEIGHT + 0.7,
+      z: 30.8,
+      w: 1.4,
+      h: 0.5,
+      d: 1.4,
+      color: COLORS.bloom,
+      collide: false,
+    })
+  }
+  // Markisen ueber den Schaufenstern von Block A und B (Strassenseite z = -22).
+  awning(b, 9, -22, 7.5, true)
+  awning(b, 25, -22, 7.5, true)
+  // Poller entlang der Kaikante, die Durchfahrt an der Station bleibt frei.
+  for (let x = -40; x <= 40; x += 5) {
+    if (x > 5 && x < 15) continue
+    b.box({ x, y: 0, z: 33.6, w: 0.32, h: 0.75, d: 0.32, color: COLORS.coral, collide: false })
+  }
+  // Abgestellte Raeder am Platz und an der Metro.
+  bicycle(b, -9.2, -9.4, 0)
+  bicycle(b, -8.2, -9.4, 0)
+  bicycle(b, 12.5, 3.2, Math.PI / 2)
+  // Segelboote im Becken, abseits der Fahrrinnen und Liegeplaetze.
+  sailBoat(b, -34, 52, 0.5)
+  sailBoat(b, -46, 71, -0.3)
+  sailBoat(b, 54, 64, 1.1)
 }
 
 function buildProps(b: WorldBuilder): void {
