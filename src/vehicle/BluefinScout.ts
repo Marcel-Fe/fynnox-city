@@ -1,6 +1,7 @@
 import * as THREE from 'three'
-import { COLORS, mat } from '../core/Palette'
+import { COLORS } from '../core/Palette'
 import type { CollisionWorld } from '../core/CollisionWorld'
+import { PartBatcher, between, box, capsule, cylinder, sphere, torus } from '../core/Shapes'
 import { buildSockets, type BoardableVehicle } from './BoardableVehicle'
 import type { Mooring } from './BluefinWaterTaxi'
 
@@ -14,6 +15,14 @@ const DIVE_RATE = 1.1
 const DOCK_RADIUS = 7
 const DOCK_SPEED = 1.2
 const HALF = new THREE.Vector3(1.7, 1.3, 4.2)
+
+const HULL = COLORS.scoutHull
+const HULL_DARK = COLORS.scoutHullDark
+const BELLY = COLORS.scoutBelly
+const TRIM = COLORS.scoutTrim
+const GLOW = COLORS.scoutGlow
+/** Mitte des Druckkoerpers auf der Hochachse. */
+const AXIS_Y = 1.05
 
 /**
  * Bluefin Scout Forschungs-U-Boot.
@@ -44,8 +53,8 @@ export class BluefinScout implements BoardableVehicle {
    */
   private hatchLock = 0
   private readonly hatch = new THREE.Group()
-  private readonly ladder: THREE.Mesh
-  private readonly thrusters: THREE.Mesh[] = []
+  private readonly ladder = new THREE.Group()
+  private readonly thrusters: THREE.Group[] = []
   private readonly cameraArm = new THREE.Group()
   private dock: Mooring | null = null
   private dockBlend = 0
@@ -55,69 +64,10 @@ export class BluefinScout implements BoardableVehicle {
     scene: THREE.Scene,
     private readonly docks: Mooring[],
   ) {
-    const hull = new THREE.Mesh(new THREE.BoxGeometry(2.0, 1.6, 7.0), mat(COLORS.cyan))
-    hull.position.set(0, 0.9, 0)
-    hull.castShadow = true
-    this.root.add(hull)
-    const bow = new THREE.Mesh(new THREE.BoxGeometry(1.4, 1.2, 1.0), mat(COLORS.navyMid))
-    bow.position.set(0, 0.9, -3.8)
-    this.root.add(bow)
-    const stern = new THREE.Mesh(new THREE.BoxGeometry(1.4, 1.2, 0.8), mat(COLORS.navyMid))
-    stern.position.set(0, 0.9, 3.7)
-    this.root.add(stern)
-    // Beobachtungskuppel: Fynnox bleibt am Steuer sichtbar.
-    const dome = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.9, 2.2), mat(COLORS.glass))
-    dome.position.set(0, 1.75, -1.4)
-    this.root.add(dome)
-    // Seitliche Tauchtanks.
-    for (const sx of [-1.15, 1.15]) {
-      const tank = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.7, 4.4), mat(COLORS.gold))
-      tank.position.set(sx, 0.55, 0.2)
-      this.root.add(tank)
-    }
-
-    const tower = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.7, 1.6), mat(COLORS.coral))
-    tower.position.set(0, 1.9, 0.7)
-    this.root.add(tower)
-    // top_hatch schwingt um ihr Scharnier an Steuerbord.
-    this.hatch.position.set(0.5, 2.26, 0.7)
-    this.root.add(this.hatch)
-    const lid = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.1, 1.0), mat(COLORS.metal))
-    lid.position.set(-0.5, 0, 0)
-    this.hatch.add(lid)
-    for (const sx of [-0.62, 0.62]) {
-      const grab = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.35, 0.1), mat(COLORS.metal))
-      grab.position.set(sx, 2.05, 0.7)
-      this.root.add(grab)
-    }
-    // internal_ladder faehrt mit der Luke aus.
-    this.ladder = new THREE.Mesh(new THREE.BoxGeometry(0.5, 1.5, 0.08), mat(COLORS.metal))
-    this.ladder.position.set(0, 1.3, 0.7)
-    this.root.add(this.ladder)
-
-    for (const sx of [-0.85, 0.85]) {
-      const thruster = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.34, 0.3, 12), mat(COLORS.metal))
-      thruster.rotation.x = Math.PI / 2
-      thruster.position.set(sx, 0.9, 4.15)
-      this.root.add(thruster)
-      this.thrusters.push(thruster)
-    }
-    const fin = new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.12, 0.9), mat(COLORS.navyMid))
-    fin.position.set(0, 0.7, 3.4)
-    this.root.add(fin)
-    const rudder = new THREE.Mesh(new THREE.BoxGeometry(0.12, 1.0, 0.9), mat(COLORS.navyMid))
-    rudder.position.set(0, 1.6, 3.4)
-    this.root.add(rudder)
-
-    // camera_arm: schwenkt langsam, damit das Boot als Forschungsgeraet lesbar ist.
-    this.cameraArm.position.set(0, 1.75, -3.4)
-    this.root.add(this.cameraArm)
-    const arm = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.9), mat(COLORS.metal))
-    arm.position.set(0, 0, -0.45)
-    this.cameraArm.add(arm)
-    const lens = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.3, 0.2), mat(COLORS.cyan))
-    lens.position.set(0, 0, -0.95)
-    this.cameraArm.add(lens)
+    this.buildHull()
+    this.buildCabin()
+    this.buildDrive()
+    this.buildFittings()
 
     for (const [name, object] of buildSockets(this.id, this.root, {
       dock_anchor: [-1.6, 0.55, 0],
@@ -137,6 +87,192 @@ export class BluefinScout implements BoardableVehicle {
     }
 
     scene.add(this.root)
+  }
+
+  /**
+   * Druckkoerper nach der Mehransicht: eifoermiger dunkelblauer Rumpf mit
+   * sandfarbenem Bauch, orangen Buegeln und cyanfarbenen Leuchtstreifen.
+   */
+  private buildHull(): void {
+    const b = new PartBatcher()
+    b.add(capsule(1.0, 4.0, 14), HULL, {
+      pos: [0, AXIS_Y, 0.1],
+      rot: [Math.PI / 2, 0, 0],
+      scale: [0.96, 1, 1.02],
+    })
+    // Der Bug ist bauchiger als das Heck - daher vorn eine zusaetzliche Kugel.
+    b.add(sphere(1.0, 14, 10), HULL, {
+      pos: [0, AXIS_Y, -1.9],
+      scale: [0.96, 1.0, 1.15],
+    })
+    b.add(capsule(0.92, 3.8, 12), BELLY, {
+      pos: [0, AXIS_Y - 0.55, 0.1],
+      rot: [Math.PI / 2, 0, 0],
+      scale: [1.06, 1, 0.66],
+    })
+    b.add(sphere(0.96, 12, 8), BELLY, {
+      pos: [0, AXIS_Y - 0.52, -1.8],
+      scale: [1.0, 0.66, 1.12],
+    })
+    // Plattenstoss zwischen Ruecken und Bauch.
+    b.pair((side) => ({
+      geometry: capsule(0.05, 3.6, 6),
+      color: HULL_DARK,
+      place: {
+        pos: [side * 0.92, AXIS_Y - 0.26, 0.1],
+        rot: [Math.PI / 2, 0, 0],
+        scale: [0.5, 1, 1],
+      },
+    }))
+    // Leuchtstreifen an den Flanken und unter dem Bug.
+    b.pair((side) => ({
+      geometry: box(0.06, 0.1, 0.9),
+      color: GLOW,
+      place: { pos: [side * 0.95, AXIS_Y + 0.15, -0.9] },
+    }))
+    b.pair((side) => ({
+      geometry: sphere(0.11, 8, 6),
+      color: GLOW,
+      place: { pos: [side * 0.42, AXIS_Y - 0.82, -2.3], scale: [1, 0.7, 1] },
+    }))
+    // Orange Handlaeufe auf dem Ruecken - Signaturdetail der Draufsicht.
+    for (const z of [-1.2, 1.4]) {
+      b.pair((side) => ({
+        geometry: torus(0.26, 0.045, 5, 8, Math.PI),
+        color: TRIM,
+        place: { pos: [side * 0.62, AXIS_Y + 0.86, z], rot: [0, Math.PI / 2, 0] },
+      }))
+    }
+    // Pfotenemblem auf der Flanke.
+    b.pair((side) => ({
+      geometry: cylinder(0.34, 0.34, 0.05, 16),
+      color: TRIM,
+      place: { pos: [side * 0.94, AXIS_Y + 0.3, 0.6], rot: [0, 0, Math.PI / 2] },
+    }))
+    b.pair((side) => ({
+      geometry: sphere(0.13, 8, 6),
+      color: HULL_DARK,
+      place: { pos: [side * 0.97, AXIS_Y + 0.24, 0.6], scale: [0.35, 0.9, 1.1] },
+    }))
+    b.finish(this.root)
+  }
+
+  /** Beobachtungskuppel, Lukenkragen und Innenraum. */
+  private buildCabin(): void {
+    const b = new PartBatcher()
+    // Kuppelrahmen.
+    b.add(torus(0.86, 0.07, 6, 18), HULL_DARK, {
+      pos: [0, AXIS_Y + 0.25, -1.62],
+      rot: [0.18, 0, 0],
+      scale: [1, 0.92, 1],
+    })
+    // Lukenkragen mit orangem Ring.
+    b.add(cylinder(0.56, 0.62, 0.34, 14), HULL, { pos: [0, AXIS_Y + 1.02, 0.7] })
+    b.add(torus(0.56, 0.06, 6, 16), TRIM, {
+      pos: [0, AXIS_Y + 1.19, 0.7],
+      rot: [Math.PI / 2, 0, 0],
+    })
+    // Griffe neben der Luke (hand_hatch_l / hand_hatch_r).
+    b.pair((side) => ({
+      geometry: torus(0.14, 0.035, 5, 8, Math.PI),
+      color: TRIM,
+      place: { pos: [side * 0.62, AXIS_Y + 1.0, 0.7], rot: [0, Math.PI / 2, Math.PI] },
+    }))
+    // Periskop und Antenne.
+    b.add(cylinder(0.06, 0.06, 0.7, 8), COLORS.metal, { pos: [0, AXIS_Y + 1.35, 1.35] })
+    b.add(box(0.16, 0.12, 0.2), HULL_DARK, { pos: [0, AXIS_Y + 1.66, 1.28] })
+    // Sitze und Pult - durch die Kuppel sichtbar.
+    for (const [sx, sz] of [
+      [-0.34, -1.2],
+      [0.34, -1.2],
+      [0, 0.2],
+    ]) {
+      b.add(box(0.46, 0.12, 0.5), BELLY, { pos: [sx, AXIS_Y - 0.05, sz] })
+      b.add(box(0.46, 0.6, 0.12), BELLY, { pos: [sx, AXIS_Y + 0.26, sz + 0.26] })
+    }
+    b.add(box(1.1, 0.4, 0.2), HULL_DARK, { pos: [0, AXIS_Y + 0.1, -2.0] })
+    b.add(box(0.6, 0.2, 0.06), GLOW, { pos: [0, AXIS_Y + 0.16, -2.11] })
+    b.finish(this.root)
+
+    const glass = new PartBatcher()
+    glass.add(sphere(0.94, 14, 10), COLORS.glass, {
+      pos: [0, AXIS_Y + 0.2, -1.9],
+      scale: [0.94, 0.92, 1.1],
+    })
+    glass.finish(this.root, { opacity: 0.4 })
+  }
+
+  /** Antrieb: zwei Gondeln am Heck, Leitwerk, Ballasttanks. */
+  private buildDrive(): void {
+    const b = new PartBatcher()
+    for (const side of [-1, 1]) {
+      const sx = side * 1.15
+      b.add(capsule(0.34, 0.5, 12), HULL, {
+        pos: [sx, AXIS_Y, 2.2],
+        rot: [Math.PI / 2, 0, 0],
+      })
+      b.add(torus(0.33, 0.06, 6, 14), TRIM, { pos: [sx, AXIS_Y, 2.6] })
+      b.add(torus(0.3, 0.05, 6, 14), GLOW, { pos: [sx, AXIS_Y, 1.82] })
+      // Ausleger zum Rumpf.
+      const boom = between([sx, AXIS_Y, 2.2], [side * 0.6, AXIS_Y + 0.1, 1.9])
+      b.add(cylinder(0.11, 0.11, boom.length, 8), HULL_DARK, boom.place)
+    }
+    // Leitwerk am Heck.
+    b.add(box(2.6, 0.12, 0.8), HULL_DARK, { pos: [0, AXIS_Y - 0.35, 2.6] })
+    b.add(box(0.12, 0.9, 0.8), HULL_DARK, { pos: [0, AXIS_Y + 0.65, 2.7] })
+    b.add(sphere(0.5, 12, 8), HULL, { pos: [0, AXIS_Y, 2.85], scale: [0.9, 0.9, 0.9] })
+    b.finish(this.root)
+
+    for (const side of [-1, 1]) {
+      const thruster = new THREE.Group()
+      thruster.position.set(side * 1.15, AXIS_Y, 2.6)
+      this.root.add(thruster)
+      const t = new PartBatcher()
+      t.add(cylinder(0.08, 0.08, 0.12, 8), COLORS.metal, { rot: [Math.PI / 2, 0, 0] })
+      for (const angle of [0, 1.57, 3.14, 4.71]) {
+        t.add(box(0.5, 0.12, 0.04), HULL_DARK, { rot: [0, 0, angle] })
+      }
+      t.finish(thruster, { castShadow: false })
+      this.thrusters.push(thruster)
+    }
+  }
+
+  /** Bewegliche Teile: Luke, Leiter, Manipulatorarm. */
+  private buildFittings(): void {
+    // top_hatch schwingt um ihr Scharnier an Steuerbord.
+    this.hatch.position.set(0.5, 2.26, 0.7)
+    this.root.add(this.hatch)
+    const h = new PartBatcher()
+    h.add(cylinder(0.54, 0.54, 0.1, 14), HULL, { pos: [-0.5, 0, 0] })
+    h.add(torus(0.5, 0.05, 5, 14), TRIM, { pos: [-0.5, 0.05, 0], rot: [Math.PI / 2, 0, 0] })
+    h.add(box(0.24, 0.06, 0.1), COLORS.metal, { pos: [-0.5, 0.1, 0] })
+    h.finish(this.hatch)
+
+    // internal_ladder faehrt mit der Luke aus.
+    this.ladder.position.set(0, 1.3, 0.7)
+    this.root.add(this.ladder)
+    const l = new PartBatcher()
+    for (const side of [-1, 1]) {
+      l.add(cylinder(0.035, 0.035, 1.5, 6), COLORS.metal, { pos: [side * 0.2, 0, 0] })
+    }
+    for (const dy of [-0.5, -0.15, 0.2, 0.55]) {
+      l.add(cylinder(0.03, 0.03, 0.4, 6), COLORS.metal, { pos: [0, dy, 0], rot: [0, 0, Math.PI / 2] })
+    }
+    l.finish(this.ladder, { castShadow: false })
+
+    // camera_arm: gelenkiger Greif- und Kameraarm unter dem Bug.
+    this.cameraArm.position.set(0, AXIS_Y - 0.7, -2.5)
+    this.root.add(this.cameraArm)
+    const a = new PartBatcher()
+    a.add(sphere(0.14, 8, 6), HULL_DARK)
+    const upper = between([0, 0, 0], [0, -0.35, -0.55])
+    a.add(cylinder(0.07, 0.07, upper.length, 8), COLORS.metal, upper.place)
+    a.add(sphere(0.11, 8, 6), HULL_DARK, { pos: [0, -0.35, -0.55] })
+    const lower = between([0, -0.35, -0.55], [0, -0.2, -1.1])
+    a.add(cylinder(0.06, 0.06, lower.length, 8), COLORS.metal, lower.place)
+    a.add(cylinder(0.13, 0.13, 0.16, 10), HULL_DARK, { pos: [0, -0.2, -1.16], rot: [Math.PI / 2, 0, 0] })
+    a.add(sphere(0.1, 8, 6), GLOW, { pos: [0, -0.2, -1.24] })
+    a.finish(this.cameraArm, { castShadow: false })
   }
 
   hasSocket(name: string): boolean {
@@ -278,7 +414,9 @@ export class BluefinScout implements BoardableVehicle {
     this.ladder.position.y = 1.3 - this.hatchOpen * 0.25
     this.ladder.visible = this.hatchOpen > 0.05
     for (const thruster of this.thrusters) {
-      thruster.rotation.y += delta * (1 + Math.abs(this.speed) * 2.5)
+      // Die Blaetter stehen jetzt quer zur Fahrtrichtung, also dreht sich die
+      // Gondel um ihre Laengsachse statt um die Hochachse.
+      thruster.rotation.z += delta * (1 + Math.abs(this.speed) * 2.5)
     }
     this.cameraArm.rotation.y = Math.sin(this.clock * 0.5) * 0.5
     this.syncTransform()

@@ -1,6 +1,17 @@
 import * as THREE from 'three'
-import { COLORS, mat } from '../core/Palette'
+import { COLORS } from '../core/Palette'
 import type { CollisionWorld } from '../core/CollisionWorld'
+import {
+  PartBatcher,
+  between,
+  box,
+  capsule,
+  cone,
+  cylinder,
+  roundedBox,
+  sphere,
+  torus,
+} from '../core/Shapes'
 import { buildSockets, type BoardableVehicle } from './BoardableVehicle'
 import type { Mooring } from './BluefinWaterTaxi'
 
@@ -25,6 +36,13 @@ const DOCK_RADIUS = 8
 const DOCK_SPEED = 1.4
 /** Halbmasse von Rumpf und Schwimmern, ohne die Fluegel. */
 const HALF = new THREE.Vector3(2.2, 1.3, 3.6)
+
+const BODY = COLORS.skyfinBody
+const TEAL = COLORS.skyfinTeal
+const TEAL_DARK = COLORS.skyfinTealDark
+const TRIM = COLORS.skyfinTrim
+/** Mitte des Rumpfs auf der Hochachse - alle Anbauteile haengen daran. */
+const AXIS_Y = 1.42
 
 /**
  * Skyfin Kuestenflugzeug.
@@ -54,9 +72,9 @@ export class Skyfin implements BoardableVehicle {
   private propeller = 0
   private readonly door = new THREE.Group()
   private readonly propellerBlades = new THREE.Group()
-  private readonly rudder: THREE.Mesh
-  private readonly ailerons: THREE.Mesh[] = []
-  private readonly belt: THREE.Mesh
+  private readonly rudder = new THREE.Group()
+  private readonly ailerons: THREE.Group[] = []
+  private readonly belt = new THREE.Group()
   private dock: Mooring | null = null
   private dockBlend = 0
 
@@ -65,79 +83,11 @@ export class Skyfin implements BoardableVehicle {
     scene: THREE.Scene,
     private readonly docks: Mooring[],
   ) {
-    const fuselage = new THREE.Mesh(new THREE.BoxGeometry(1.3, 1.4, 6.4), mat(COLORS.cream))
-    fuselage.position.set(0, 1.35, 0.2)
-    fuselage.castShadow = true
-    this.root.add(fuselage)
-    const nose = new THREE.Mesh(new THREE.BoxGeometry(1.0, 1.0, 1.0), mat(COLORS.coral))
-    nose.position.set(0, 1.35, -3.3)
-    this.root.add(nose)
-    const canopy = new THREE.Mesh(new THREE.BoxGeometry(1.15, 0.8, 2.0), mat(COLORS.glass))
-    canopy.position.set(0, 2.1, -1.2)
-    this.root.add(canopy)
-
-    // Tragflaeche mit Streben - Hochdecker, damit die Kabine frei einsehbar bleibt.
-    const wing = new THREE.Mesh(new THREE.BoxGeometry(11, 0.18, 1.9), mat(COLORS.cyan))
-    wing.position.set(0, 2.35, -0.3)
-    wing.castShadow = true
-    this.root.add(wing)
-    for (const sx of [-0.62, 0.62]) {
-      const strut = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.5, 0.5), mat(COLORS.metal))
-      strut.position.set(sx, 2.05, -0.3)
-      this.root.add(strut)
-    }
-    for (const sx of [-3.6, 3.6]) {
-      const aileron = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.12, 0.5), mat(COLORS.gold))
-      aileron.position.set(sx, 2.35, 0.85)
-      this.root.add(aileron)
-      this.ailerons.push(aileron)
-    }
-
-    const fin = new THREE.Mesh(new THREE.BoxGeometry(0.16, 1.7, 1.4), mat(COLORS.coral))
-    fin.position.set(0, 2.6, 3.0)
-    this.root.add(fin)
-    const stabilizer = new THREE.Mesh(new THREE.BoxGeometry(3.6, 0.14, 1.0), mat(COLORS.cyan))
-    stabilizer.position.set(0, 2.0, 3.2)
-    this.root.add(stabilizer)
-    this.rudder = new THREE.Mesh(new THREE.BoxGeometry(0.14, 1.3, 0.6), mat(COLORS.gold))
-    this.rudder.position.set(0, 2.5, 3.75)
-    this.root.add(this.rudder)
-
-    // Schwimmer statt Fahrwerk: das Flugzeug liegt im Wasser, nicht auf der Strasse.
-    for (const sx of [-1.6, 1.6]) {
-      const float = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.55, 4.6), mat(COLORS.navyMid))
-      float.position.set(sx, 0.15, 0.1)
-      float.castShadow = true
-      this.root.add(float)
-      for (const sz of [-1.5, 1.5]) {
-        const strut = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.55, 0.1), mat(COLORS.metal))
-        strut.position.set(sx, 0.68, sz)
-        this.root.add(strut)
-      }
-    }
-
-    // propeller: eigene Gruppe, damit die Drehzahl sichtbar wird.
-    this.propellerBlades.position.set(0, 1.35, -3.9)
-    this.root.add(this.propellerBlades)
-    const spinner = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.3, 0.3), mat(COLORS.metal))
-    this.propellerBlades.add(spinner)
-    for (const angle of [0, Math.PI / 2]) {
-      const blade = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.14, 0.08), mat(COLORS.metal))
-      blade.rotation.z = angle
-      this.propellerBlades.add(blade)
-    }
-
-    // cockpit_door schwingt um ihr Scharnier an Backbord.
-    this.door.position.set(-0.66, 1.5, -1.9)
-    this.root.add(this.door)
-    const doorPanel = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.9, 1.4), mat(COLORS.cream))
-    doorPanel.position.set(0, 0, 0.7)
-    this.door.add(doorPanel)
-
-    // seat_belt: liegt offen ueber dem Sitz, solange die Tuer offen steht.
-    this.belt = new THREE.Mesh(new THREE.BoxGeometry(0.86, 0.09, 0.1), mat(COLORS.coral))
-    this.belt.position.set(0, 1.42, -0.62)
-    this.root.add(this.belt)
+    this.buildFuselage()
+    this.buildWing()
+    this.buildTail()
+    this.buildFloats()
+    this.buildFittings()
 
     for (const [name, object] of buildSockets(this.id, this.root, {
       entry_pilot: [-2.6, 0.55, -0.4],
@@ -158,6 +108,207 @@ export class Skyfin implements BoardableVehicle {
     }
 
     scene.add(this.root)
+  }
+
+  /**
+   * Rumpf nach der Seitenansicht: runde cremefarbene Roehre mit tealem Bauch,
+   * schlank auslaufendem Heckausleger, tealer Motorhaube und Kanzelverglasung.
+   */
+  private buildFuselage(): void {
+    const b = new PartBatcher()
+    b.add(capsule(0.7, 2.6, 12), BODY, { pos: [0, AXIS_Y, -1.0], rot: [Math.PI / 2, 0, 0] })
+    // Heckausleger: verjuengt sich nach hinten, statt als Kiste durchzulaufen.
+    b.add(cylinder(0.26, 0.7, 2.7, 12), BODY, { pos: [0, AXIS_Y, 2.35], rot: [Math.PI / 2, 0, 0] })
+    // Heckabschluss: ein offenes Rohrende liest wie ein abgesaegtes Teil.
+    b.add(sphere(0.27, 10, 8), BODY, { pos: [0, AXIS_Y, 3.68], scale: [1, 1, 1.3] })
+    // Tealer Bauch mit der Trennlinie der Referenz.
+    b.add(capsule(0.5, 3.2, 10), TEAL, {
+      pos: [0, AXIS_Y - 0.42, -0.5],
+      rot: [Math.PI / 2, 0, 0],
+      scale: [1.22, 1, 0.66],
+    })
+    b.pair((side) => ({
+      geometry: capsule(0.05, 3.1, 6),
+      color: TRIM,
+      place: {
+        pos: [side * 0.66, AXIS_Y - 0.22, -0.5],
+        rot: [Math.PI / 2, 0, 0],
+        scale: [0.5, 1, 1],
+      },
+    }))
+
+    // Motorhaube und Spinner mit Pfotenemblem (Frontansicht des Pakets).
+    b.add(cylinder(0.6, 0.68, 0.55, 14), TEAL, { pos: [0, AXIS_Y, -2.9], rot: [Math.PI / 2, 0, 0] })
+    b.add(torus(0.58, 0.06, 6, 16), TRIM, { pos: [0, AXIS_Y, -3.16] })
+    b.add(cone(0.26, 0.42, 10), TRIM, { pos: [0, AXIS_Y, -3.38], rot: [-Math.PI / 2, 0, 0] })
+    // Landescheinwerfer links und rechts der Haube.
+    b.pair((side) => ({
+      geometry: sphere(0.11, 8, 6),
+      color: COLORS.gold,
+      place: { pos: [side * 0.42, AXIS_Y + 0.12, -3.02], scale: [1, 1, 0.7] },
+    }))
+
+    // Kanzelrahmen: dunkle Streben, dazwischen kommt die Verglasung.
+    b.add(cylinder(0.6, 0.6, 0.09, 12), COLORS.metal, {
+      pos: [0, AXIS_Y + 0.56, -2.24],
+      rot: [Math.PI / 2, 0, 0],
+      scale: [1.02, 1, 0.62],
+    })
+    b.add(cylinder(0.62, 0.62, 0.09, 12), COLORS.metal, {
+      pos: [0, AXIS_Y + 0.52, -0.34],
+      rot: [Math.PI / 2, 0, 0],
+      scale: [1.02, 1, 0.66],
+    })
+
+    // Cockpit: Sitzschalen und Instrumententafel bleiben durch die Kanzel lesbar.
+    for (const sx of [-0.3, 0.3]) {
+      b.add(box(0.44, 0.1, 0.5), COLORS.navy, { pos: [sx, AXIS_Y - 0.06, -0.9] })
+      b.add(box(0.44, 0.55, 0.1), COLORS.navy, { pos: [sx, AXIS_Y + 0.22, -0.65] })
+    }
+    b.add(box(1.0, 0.34, 0.16), COLORS.navyMid, { pos: [0, AXIS_Y + 0.18, -2.1] })
+    b.add(box(0.34, 0.16, 0.08), COLORS.cyan, { pos: [-0.28, AXIS_Y + 0.2, -2.18] })
+    b.finish(this.root)
+
+    const glass = new PartBatcher()
+    glass.add(sphere(0.62, 12, 10), COLORS.glass, {
+      pos: [0, AXIS_Y + 0.28, -1.3],
+      scale: [1.03, 1.05, 1.6],
+    })
+    glass.finish(this.root, { opacity: 0.42 })
+  }
+
+  /** Hochdecker mit orangen Spitzen und den Solarfeldern der Draufsicht. */
+  private buildWing(): void {
+    const b = new PartBatcher()
+    b.add(roundedBox(9.4, 0.17, 1.9, 0.07), BODY, { pos: [0, 2.35, -0.3] })
+    b.pair((side) => ({
+      geometry: roundedBox(1.1, 0.18, 1.9, 0.07),
+      color: TRIM,
+      place: { pos: [side * 5.24, 2.35, -0.3] },
+    }))
+    b.pair((side) => ({
+      geometry: box(3.3, 0.05, 1.2),
+      color: COLORS.solarPanel,
+      place: { pos: [side * 2.7, 2.45, -0.35] },
+    }))
+    // Aufsattelung auf dem Rumpfruecken.
+    b.add(roundedBox(0.9, 0.28, 1.6, 0.08), BODY, { pos: [0, 2.18, -0.3] })
+    // Fluegelstreben zum Schwimmerausleger.
+    for (const side of [-1, 1]) {
+      const upper = between([side * 0.7, 2.18, -0.3], [side * 3.1, 2.3, -0.3])
+      b.add(cylinder(0.05, 0.05, upper.length, 6), COLORS.metal, upper.place)
+    }
+    b.finish(this.root)
+
+    // Querruder schlagen sichtbar aus, also eigene Gruppen.
+    for (const sx of [-3.6, 3.6]) {
+      const aileron = new THREE.Group()
+      aileron.position.set(sx, 2.35, 0.85)
+      this.root.add(aileron)
+      const a = new PartBatcher()
+      a.add(roundedBox(2.2, 0.12, 0.5, 0.04), BODY)
+      a.finish(aileron, { castShadow: false })
+      this.ailerons.push(aileron)
+    }
+  }
+
+  /** Leitwerk: orange Finne mit Pfote, cremefarbenes Hoehenruder mit Spitzen. */
+  private buildTail(): void {
+    const b = new PartBatcher()
+    b.add(roundedBox(0.16, 1.75, 1.35, 0.06), TRIM, { pos: [0, 2.6, 3.0] })
+    b.add(cylinder(0.28, 0.28, 0.04, 12), BODY, {
+      pos: [0.1, 2.85, 3.1],
+      rot: [0, 0, Math.PI / 2],
+    })
+    for (const [dx, dy] of [
+      [-0.12, 0.16],
+      [0, 0.19],
+      [0.12, 0.16],
+    ]) {
+      b.add(sphere(0.05, 6, 5), BODY, {
+        pos: [0.1, 2.85 + dy, 3.1 + dx],
+        scale: [0.4, 1, 1],
+      })
+    }
+    // Das Hoehenruder sitzt auf dem Heckausleger, nicht darueber in der Luft.
+    b.add(roundedBox(3.4, 0.14, 1.0, 0.05), BODY, { pos: [0, 1.62, 3.2] })
+    b.pair((side) => ({
+      geometry: roundedBox(0.5, 0.15, 1.0, 0.05),
+      color: TRIM,
+      place: { pos: [side * 1.7, 1.62, 3.2] },
+    }))
+    b.finish(this.root)
+
+    this.rudder.position.set(0, 2.5, 3.7)
+    this.root.add(this.rudder)
+    const r = new PartBatcher()
+    r.add(roundedBox(0.14, 1.3, 0.6, 0.05), TRIM, { pos: [0, 0, 0.2] })
+    r.finish(this.rudder, { castShadow: false })
+  }
+
+  /** Schwimmer mit oranger Spitze und den gekreuzten Streben der Seitenansicht. */
+  private buildFloats(): void {
+    const b = new PartBatcher()
+    for (const side of [-1, 1]) {
+      const sx = side * 1.6
+      b.add(capsule(0.38, 3.5, 10), TEAL, {
+        pos: [sx, 0.15, 0.1],
+        rot: [Math.PI / 2, 0, 0],
+        scale: [1.06, 1, 0.82],
+      })
+      b.add(capsule(0.3, 3.4, 8), TEAL_DARK, {
+        pos: [sx, -0.06, 0.1],
+        rot: [Math.PI / 2, 0, 0],
+        scale: [1.05, 1, 0.55],
+      })
+      b.add(sphere(0.3, 10, 8), TRIM, { pos: [sx, 0.2, -2.05], scale: [1.05, 0.85, 1.3] })
+      b.add(capsule(0.05, 3.2, 6), TRIM, {
+        pos: [sx + side * 0.36, 0.15, 0.1],
+        rot: [Math.PI / 2, 0, 0],
+        scale: [0.4, 1, 1],
+      })
+      // Streben: senkrecht plus Kreuz, wie in der Seitenansicht.
+      for (const sz of [-1.5, 1.5]) {
+        const leg = between([sx, 0.42, sz], [side * 0.62, AXIS_Y - 0.55, sz * 0.8])
+        b.add(cylinder(0.055, 0.055, leg.length, 6), COLORS.metal, leg.place)
+      }
+      const cross1 = between([sx, 0.45, -1.5], [side * 0.62, AXIS_Y - 0.55, 1.2])
+      const cross2 = between([sx, 0.45, 1.5], [side * 0.62, AXIS_Y - 0.55, -1.2])
+      b.add(cylinder(0.04, 0.04, cross1.length, 6), COLORS.metal, cross1.place)
+      b.add(cylinder(0.04, 0.04, cross2.length, 6), COLORS.metal, cross2.place)
+    }
+    b.finish(this.root)
+  }
+
+  /** Bewegliche Teile: Propeller, Cockpittuer, Gurt. */
+  private buildFittings(): void {
+    this.propellerBlades.position.set(0, AXIS_Y, -3.5)
+    this.root.add(this.propellerBlades)
+    const p = new PartBatcher()
+    p.add(sphere(0.2, 8, 6), TRIM, { scale: [1, 1, 1.4] })
+    for (const angle of [0, 2.094, 4.189]) {
+      p.add(capsule(0.08, 2.2, 6), COLORS.fynnoxLeather, {
+        rot: [0, 0, angle],
+        scale: [1, 1, 0.32],
+      })
+    }
+    p.finish(this.propellerBlades, { castShadow: false })
+
+    // cockpit_door schwingt um ihr Scharnier an Backbord.
+    this.door.position.set(-0.66, 1.5, -1.9)
+    this.root.add(this.door)
+    const d = new PartBatcher()
+    d.add(roundedBox(0.1, 0.92, 1.4, 0.05), BODY, { pos: [0, 0, 0.7] })
+    d.add(box(0.06, 0.12, 0.28), COLORS.metal, { pos: [-0.06, -0.1, 1.15] })
+    d.finish(this.door)
+
+    // seat_belt: liegt offen ueber dem Sitz, solange die Tuer offen steht.
+    this.belt.position.set(0, 1.42, -0.62)
+    this.root.add(this.belt)
+    const s = new PartBatcher()
+    s.add(box(0.86, 0.08, 0.09), TRIM)
+    s.add(box(0.12, 0.12, 0.12), COLORS.metal)
+    s.finish(this.belt, { castShadow: false })
   }
 
   hasSocket(name: string): boolean {

@@ -53,6 +53,44 @@ export const COLORS = {
   sparkBodyDark: '#1F646D',
   sparkTrim: '#E8842E',
   tyre: '#2B3138',
+  // Bluefin Wassertaxi nach 09_Fahrzeuge/02: cremefarbener Aufbau ueber tealem
+  // Unterrumpf, orange Scheuerleiste und Dachkante, dunkle Fensterrahmen.
+  taxiHull: '#F0E1BF',
+  taxiKeel: '#2F7E8B',
+  taxiKeelDark: '#245F6A',
+  taxiTrim: '#E2842F',
+  taxiFrame: '#4A5560',
+  // Skyfin nach 09_Fahrzeuge/05: cremefarbener Rumpf mit tealem Bauch und
+  // tealen Schwimmern, orange Leitwerk und Fluegelspitzen, dunkelblaue Solarfelder.
+  skyfinBody: '#EFE3C9',
+  skyfinTeal: '#2C7F8C',
+  skyfinTealDark: '#215F6A',
+  skyfinTrim: '#E58A2E',
+  solarPanel: '#243A63',
+  // Bluefin Scout nach 24_Bluefin_Scout_U_Boot: dunkelblauer Druckkoerper,
+  // sandfarbener Bauch, orange Buegel, cyan Leuchtstreifen.
+  scoutHull: '#33477A',
+  scoutHullDark: '#26355C',
+  scoutBelly: '#D8C9A9',
+  scoutTrim: '#E4772C',
+  scoutGlow: '#4FD4E8',
+  // Ambient-NPCs nach 12_Charakter_Turnarounds. Mira (Rotpanda-Mechanikerin),
+  // Boro (Baer) und Tavi (Otter) sind benannte Figuren des Pakets.
+  miraFur: '#D4602C',
+  miraCream: '#F6E3CB',
+  miraJacket: '#7C9285',
+  miraShirt: '#E8A93A',
+  miraPants: '#3B3F45',
+  boroFur: '#B0722F',
+  boroFurDark: '#8A551F',
+  boroJacket: '#2E3D5C',
+  boroShirt: '#5E8577',
+  boroPants: '#C9A66B',
+  taviFur: '#8A5E33',
+  taviCream: '#EBD9BC',
+  taviJacket: '#2A55A8',
+  taviBag: '#E07C2A',
+  taviPants: '#2E3550',
 } as const
 
 export type MaterialKey = keyof typeof COLORS

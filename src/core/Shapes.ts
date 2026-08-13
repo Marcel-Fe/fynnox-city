@@ -52,12 +52,19 @@ export class PartBatcher {
     }
   }
 
-  finish(parent: THREE.Object3D, options?: { castShadow?: boolean }): void {
+  /**
+   * `opacity` unter 1 macht den ganzen Batch durchsichtig - gedacht fuer
+   * Verglasungen, hinter denen etwas zu sehen sein soll (Kanzel, Kuppel,
+   * Fensterband). Glas wirft dann keinen Schatten mehr, sonst haette die
+   * Kabine trotz Scheibe einen massiven Schlagschatten.
+   */
+  finish(parent: THREE.Object3D, options?: { castShadow?: boolean; opacity?: number }): void {
+    const opacity = options?.opacity ?? 1
     for (const [color, geometries] of this.batches) {
       const merged = mergeGeometries(geometries, false)
       if (!merged) continue
-      const mesh = new THREE.Mesh(merged, mat(color))
-      mesh.castShadow = options?.castShadow ?? true
+      const mesh = new THREE.Mesh(merged, mat(color, opacity < 1 ? { transparent: opacity } : undefined))
+      mesh.castShadow = options?.castShadow ?? opacity >= 1
       parent.add(mesh)
       for (const geometry of geometries) geometry.dispose()
     }
@@ -75,6 +82,28 @@ export function alongLocalY(
     new THREE.Euler(rot[0], rot[1], rot[2]),
   )
   return [base[0] + offset.x, base[1] + offset.y, base[2] + offset.z]
+}
+
+/**
+ * Platzierung fuer ein Teil, das zwei Punkte verbindet - Strebe, Tau, Kranseil.
+ * Die Laenge kommt aus dem Abstand, die Drehung aus der Richtung; geschaetzte
+ * Winkel sind bei Verstrebungen sofort als Knick sichtbar.
+ */
+export function between(
+  from: [number, number, number],
+  to: [number, number, number],
+): { place: Placement; length: number } {
+  const a = new THREE.Vector3(...from)
+  const b = new THREE.Vector3(...to)
+  const direction = b.clone().sub(a)
+  const length = direction.length()
+  const quaternion = new THREE.Quaternion().setFromUnitVectors(
+    new THREE.Vector3(0, 1, 0),
+    direction.normalize(),
+  )
+  const euler = new THREE.Euler().setFromQuaternion(quaternion)
+  const mid = a.add(b).multiplyScalar(0.5)
+  return { place: { pos: [mid.x, mid.y, mid.z], rot: [euler.x, euler.y, euler.z] }, length }
 }
 
 export const sphere = (r: number, w = 10, h = 8) => new THREE.SphereGeometry(r, w, h)
