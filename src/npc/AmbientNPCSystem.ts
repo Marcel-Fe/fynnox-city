@@ -1,5 +1,6 @@
 import * as THREE from 'three'
-import { COLORS, mat } from '../core/Palette'
+import { COLORS } from '../core/Palette'
+import { PartBatcher, alongLocalY, box, capsule, cone, cylinder, sphere } from '../core/Shapes'
 import type { AmbientStateId } from '../contracts/types'
 
 interface NPC {
@@ -20,7 +21,102 @@ interface NPC {
 const NEAR_RING = 26
 const MID_RING = 62
 
-const BODY_COLORS = ['#C96F4B', '#7F8FA6', '#B4894F', '#6FA98B', '#D2A15C', '#8C6FA9']
+/**
+ * Aussehen einer Ambient-Figur. Alle laufen durch dieselbe Bauroutine; was sie
+ * unterscheidet, sind Farben und drei Formmerkmale. Mira, Boro und Tavi stammen
+ * aus 03_Bildreferenzen/12_Charakter_Turnarounds und sind benannte Figuren des
+ * Pakets - ihre Farben sind abgelesen, nicht erfunden.
+ */
+interface NPCLook {
+  fur: string
+  cream: string
+  jacket: string
+  accent: string
+  pants: string
+  shoe: string
+  /** Ohrform: spitz wie beim Fuchs, rund wie beim Baeren, klein wie beim Otter. */
+  ear: 'pointed' | 'round' | 'small'
+  /** Schweif: buschig geringelt, schlank, oder keiner. */
+  tail: 'bushy' | 'slim' | 'none'
+  /** Koerperfuelle. Boro ist deutlich breiter als Tavi. */
+  bulk: number
+  /** Umhaengetasche wie in Tavis Turnaround. */
+  bag?: boolean
+}
+
+const LOOKS: NPCLook[] = [
+  // Mira - Rotpanda-Mechanikerin: salbeigruene Jacke, gelbes Shirt, Ringelschweif.
+  {
+    fur: COLORS.miraFur,
+    cream: COLORS.miraCream,
+    jacket: COLORS.miraJacket,
+    accent: COLORS.miraShirt,
+    pants: COLORS.miraPants,
+    shoe: COLORS.miraCream,
+    ear: 'pointed',
+    tail: 'bushy',
+    bulk: 0.95,
+  },
+  // Boro - Baer: dunkelblaue Jeansjacke, gruenes Shirt, khakifarbene Hose.
+  {
+    fur: COLORS.boroFur,
+    cream: COLORS.boroFurDark,
+    jacket: COLORS.boroJacket,
+    accent: COLORS.boroShirt,
+    pants: COLORS.boroPants,
+    shoe: COLORS.boroJacket,
+    ear: 'round',
+    tail: 'none',
+    bulk: 1.28,
+  },
+  // Tavi - Otter: blaue Lederjacke, weisses Shirt, orange Bauchtasche.
+  {
+    fur: COLORS.taviFur,
+    cream: COLORS.taviCream,
+    jacket: COLORS.taviJacket,
+    accent: COLORS.taviBag,
+    pants: COLORS.taviPants,
+    shoe: COLORS.taviJacket,
+    ear: 'small',
+    tail: 'slim',
+    bulk: 0.9,
+    bag: true,
+  },
+  // Weitere Stadtbewohner: dieselbe Figur, andere Farbstellung.
+  {
+    fur: '#B4894F',
+    cream: '#F2E2C6',
+    jacket: '#6FA98B',
+    accent: '#E8C05A',
+    pants: '#3C4249',
+    shoe: '#3C4249',
+    ear: 'round',
+    tail: 'slim',
+    bulk: 1.05,
+  },
+  {
+    fur: '#8C7F92',
+    cream: '#EFE6DC',
+    jacket: '#C9634E',
+    accent: '#F0DCC0',
+    pants: '#43485A',
+    shoe: '#43485A',
+    ear: 'pointed',
+    tail: 'bushy',
+    bulk: 0.92,
+  },
+  {
+    fur: '#C98F5A',
+    cream: '#F6E7CD',
+    jacket: '#3D7A93',
+    accent: '#E8842E',
+    pants: '#4A4238',
+    shoe: '#4A4238',
+    ear: 'small',
+    tail: 'slim',
+    bulk: 1.12,
+  },
+]
 
 /**
  * Activity Points nach LEBENDIGE_WELT_DIALOGE_UND_MOBILE_OPTIMIERUNG.md.
@@ -68,32 +164,22 @@ export class AmbientNPCSystem {
     needsProject: boolean,
   ): NPC {
     const root = new THREE.Group()
-    const color = BODY_COLORS[index % BODY_COLORS.length]
-    const torso = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.5, 0.26), mat(color))
-    torso.position.y = 1.0
-    torso.castShadow = true
-    root.add(torso)
-    const head = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.26, 0.28), mat(COLORS.fynnoxBelly))
-    head.position.y = 1.42
-    root.add(head)
+    const look = LOOKS[index % LOOKS.length]
+    this.buildBody(root, look)
 
     const legs: THREE.Group[] = []
     for (const dx of [-0.11, 0.11]) {
       const leg = new THREE.Group()
       leg.position.set(dx, 0.75, 0)
-      const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.75, 0.15), mat(COLORS.navyMid))
-      mesh.position.y = -0.375
-      leg.add(mesh)
+      this.buildLeg(leg, look)
       root.add(leg)
       legs.push(leg)
     }
     const arms: THREE.Group[] = []
-    for (const dx of [-0.26, 0.26]) {
+    for (const side of [-1, 1]) {
       const arm = new THREE.Group()
-      arm.position.set(dx, 1.2, 0)
-      const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.44, 0.11), mat(color))
-      mesh.position.y = -0.22
-      arm.add(mesh)
+      arm.position.set(side * 0.24 * look.bulk, 1.2, 0)
+      this.buildArm(arm, look, side)
       root.add(arm)
       arms.push(arm)
     }
@@ -115,6 +201,90 @@ export class AmbientNPCSystem {
       tick: 0,
       needsProject,
     }
+  }
+
+  /**
+   * Rumpf, Kopf und Schweif in einem Durchlauf.
+   *
+   * Bewusst einfacher als FynnoxModel: dort tragen achtzig Teile eine Figur,
+   * die formatfuellend im Bild steht. Hier stehen bis zu siebzehn Figuren
+   * gleichzeitig in der Szene, und jede Farbe kostet einen eigenen Draw-Call.
+   * Deshalb fuenf Farben im Rumpfbatch, Handschuh in Jackenfarbe und ein
+   * Schweif ohne eigene Gruppe.
+   */
+  private buildBody(root: THREE.Group, look: NPCLook): void {
+    const b = new PartBatcher()
+    const bulk = look.bulk
+    // Rumpf in der Jacke, cremefarbenes Shirt im offenen Ausschnitt.
+    b.add(capsule(0.18 * bulk, 0.3), look.jacket, { pos: [0, 1.06, 0], scale: [1, 1, 0.82] })
+    b.add(capsule(0.13 * bulk, 0.22), look.accent, { pos: [0, 1.11, 0.05], scale: [1, 1, 0.7] })
+    b.add(cylinder(0.17 * bulk, 0.17 * bulk, 0.07, 10), look.pants, { pos: [0, 0.83, 0] })
+    // Kragen und Hals.
+    b.add(cylinder(0.09, 0.12, 0.09, 10), look.jacket, { pos: [0, 1.29, 0] })
+    b.add(cylinder(0.07, 0.08, 0.09, 8), look.fur, { pos: [0, 1.34, 0] })
+
+    // Kopf: Schaedel, Schnauze, Nase, Augen.
+    const headY = 1.47
+    b.add(sphere(0.155, 12, 10), look.fur, { pos: [0, headY, 0], scale: [1, 0.98, 1.02] })
+    b.add(sphere(0.075, 10, 8), look.cream, {
+      pos: [0, headY - 0.05, 0.12],
+      scale: [1, 0.82, 1.25],
+    })
+    b.add(sphere(0.028, 8, 6), COLORS.fynnoxDark, { pos: [0, headY - 0.03, 0.2] })
+    for (const side of [-1, 1]) {
+      b.add(sphere(0.032, 8, 6), COLORS.fynnoxDark, {
+        pos: [side * 0.068, headY + 0.035, 0.125],
+      })
+      // Ohr nach Tierart. Die Spitze sitzt auf der Ohrachse, nicht daneben.
+      const base: [number, number, number] = [side * 0.095, headY + 0.13, -0.01]
+      const rot: [number, number, number] = [-0.1, 0, -side * 0.2]
+      if (look.ear === 'pointed') {
+        b.add(cone(0.062, 0.2, 7), look.fur, { pos: base, rot, scale: [1, 1, 0.5] })
+        b.add(cone(0.036, 0.12, 6), look.cream, {
+          pos: alongLocalY(base, rot, -0.012),
+          rot,
+          scale: [1, 1, 0.42],
+        })
+      } else if (look.ear === 'round') {
+        b.add(sphere(0.062, 8, 6), look.fur, { pos: [side * 0.115, headY + 0.13, -0.01], scale: [1, 1, 0.55] })
+        b.add(sphere(0.036, 6, 5), look.cream, { pos: [side * 0.125, headY + 0.13, 0.01], scale: [1, 1, 0.4] })
+      } else {
+        b.add(sphere(0.042, 8, 6), look.fur, { pos: [side * 0.108, headY + 0.1, -0.02], scale: [1, 1, 0.5] })
+      }
+    }
+
+    // Schweif - keine eigene Gruppe, er schwingt bei Ambient-Figuren nicht.
+    if (look.tail === 'bushy') {
+      b.add(sphere(0.085, 8, 6), look.fur, { pos: [0, 0.82, -0.19], scale: [1, 1, 1.15] })
+      b.add(sphere(0.075, 8, 6), look.cream, { pos: [0, 0.7, -0.3], scale: [1, 1, 1.1] })
+      b.add(sphere(0.058, 8, 6), look.fur, { pos: [0, 0.56, -0.37] })
+      b.add(sphere(0.042, 6, 5), look.cream, { pos: [0, 0.45, -0.41] })
+    } else if (look.tail === 'slim') {
+      b.add(capsule(0.055, 0.16, 8), look.fur, { pos: [0, 0.78, -0.2], rot: [0.8, 0, 0] })
+      b.add(capsule(0.038, 0.16, 8), look.fur, { pos: [0, 0.6, -0.32], rot: [1.1, 0, 0] })
+      b.add(sphere(0.03, 6, 5), look.cream, { pos: [0, 0.5, -0.38] })
+    }
+    b.finish(root)
+  }
+
+  /** Hosenbein mit Schuh. Gleiche Farbe heisst ein Draw-Call statt zwei. */
+  private buildLeg(group: THREE.Group, look: NPCLook): void {
+    const b = new PartBatcher()
+    b.add(capsule(0.062, 0.5), look.pants, { pos: [0, -0.31, 0] })
+    b.add(box(0.115, 0.085, 0.2), look.shoe, { pos: [0, -0.7, 0.03] })
+    b.finish(group, { castShadow: false })
+  }
+
+  /** Aermel und Hand in einer Farbe - auf Ambient-Groesse liest das als Handschuh. */
+  private buildArm(group: THREE.Group, look: NPCLook, side: number): void {
+    const b = new PartBatcher()
+    b.add(capsule(0.052, 0.32), look.jacket, { pos: [0, -0.2, 0] })
+    b.add(sphere(0.058, 8, 6), look.jacket, { pos: [0, -0.4, 0], scale: [0.85, 1, 1] })
+    // Bauchtasche nur rechts, wie im Turnaround von Tavi.
+    if (side > 0 && look.bag) {
+      b.add(sphere(0.075, 8, 6), look.accent, { pos: [-0.16, -0.12, 0.14], scale: [1.3, 0.8, 0.6] })
+    }
+    b.finish(group, { castShadow: false })
   }
 
   /** NPCs auf der Hafenterrasse erscheinen erst, wenn das Projekt belebt ist. */
