@@ -20,9 +20,11 @@ export class SkySystem {
   private scannerMode = false
 
   constructor(private readonly scene: THREE.Scene) {
-    // Kuehle Bodenaufhellung gegen warme Sonne: der Farbkontrast zwischen
-    // besonnter und beschatteter Flaeche traegt den Look der Bildreferenzen.
-    this.hemi = new THREE.HemisphereLight('#BFE4F5', '#5E7392', 1.15)
+    // Zwei Fuellichter statt einem: von oben der kuehle Himmel, von unten das
+    // warme Rueckstrahllicht des Sandsteinbodens. Vorher war die Bodenfarbe ein
+    // dunkles Blaugrau - damit lief jede nach unten zeigende Flaeche ins
+    // Schmutzige, und genau die machen in einer Stadt den halben Anblick aus.
+    this.hemi = new THREE.HemisphereLight('#BFE4F5', '#A08F6E', 1.15)
     scene.add(this.hemi)
 
     this.sun = new THREE.DirectionalLight('#FFF0D2', 1.5)
@@ -32,12 +34,19 @@ export class SkySystem {
     this.sun.shadow.mapSize.set(1536, 1536)
     this.sun.shadow.camera.near = 1
     this.sun.shadow.camera.far = 220
-    const size = 70
+    // Engerer Ausschnitt bei gleicher Kartengroesse: dieselben 1536 Pixel
+    // verteilen sich auf 96 statt 140 Meter, der Schatten wird entsprechend
+    // schaerfer. Er folgt ohnehin dem Spieler, weiter reicht die Sicht nicht.
+    const size = 48
     this.sun.shadow.camera.left = -size
     this.sun.shadow.camera.right = size
     this.sun.shadow.camera.top = size
     this.sun.shadow.camera.bottom = -size
-    this.sun.shadow.bias = -0.0008
+    this.sun.shadow.bias = -0.0004
+    // normalBias schiebt den Vergleichspunkt entlang der Normalen statt entlang
+    // der Blickrichtung. Das loest die Streifen auf schraegen Flaechen, ohne den
+    // Schatten wie ein grosser bias vom Objekt abzuloesen.
+    this.sun.shadow.normalBias = 0.03
     scene.add(this.sun)
     scene.add(this.sun.target)
 
@@ -107,14 +116,12 @@ export class SkySystem {
     const noon = new THREE.Color('#FFF6E0')
     const sunColor = warm.clone().lerp(noon, THREE.MathUtils.smoothstep(height, 0.15, 0.7))
     this.sun.color.copy(sunColor)
-    // Sonne und Himmelslicht zusammen lagen bei rund 2,7 - damit landete jede
-    // besonnte Flaeche in der Schulter der ACES-Kurve und die Szene wusch aus.
-    // Weniger Fuelllicht heisst tiefere Schatten und ueberhaupt erst Kontrast,
-    // in dem die Toon-Abstufung sichtbar wird.
-    this.sun.intensity = 0.45 + height * 0.95
-    // Genug Himmelslicht, dass Schattenseiten farbig bleiben statt schwarz
-    // zuzulaufen - rund 3:1 zwischen besonnt und beschattet.
-    this.hemi.intensity = 0.3 + height * 0.4
+    this.sun.intensity = 0.5 + height * 0.85
+    // Mehr Fuelllicht als zuvor. Der Kontrast zwischen besonnt und beschattet
+    // liegt damit bei rund 2:1 statt 3:1 - in den Bildreferenzen ist keine
+    // Schattenflaeche tot, sie ist nur kuehler und etwas dunkler. Der Verlust an
+    // Helligkeitskontrast wird im Material durch den Warm-Kalt-Kontrast ersetzt.
+    this.hemi.intensity = 0.45 + height * 0.5
 
     this.uniforms.uTop.value.set('#2F6D9E').lerp(new THREE.Color('#7FC7E8'), height)
     this.uniforms.uBottom.value.set('#FFB27A').lerp(new THREE.Color('#FFF3D8'), height)
@@ -128,7 +135,7 @@ export class SkySystem {
       this.hemi.color.set('#7FE3F5')
     } else {
       this.hemi.color.set('#BFE4F5')
-      this.hemi.groundColor.set('#5E7392')
+      this.hemi.groundColor.set('#A08F6E')
       fog.color.copy(this.uniforms.uBottom.value)
     }
     // Das Streiflicht kommt aus dem Himmel, nicht von der Sonne - es zeichnet

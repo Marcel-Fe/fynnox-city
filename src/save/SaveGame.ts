@@ -38,6 +38,8 @@ export interface SaveData {
     shapeAndColor: boolean
     driveAssist: boolean
     sensitivity: number
+    /** Aeltere Staende kennen das Feld nicht - applyLoadedSettings fuellt auf. */
+    highDetail?: boolean
     debugOverlay: boolean
   }
   onboarding_done: boolean

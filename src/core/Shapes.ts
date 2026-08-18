@@ -65,6 +65,9 @@ export class PartBatcher {
       if (!merged) continue
       const mesh = new THREE.Mesh(merged, mat(color, opacity < 1 ? { transparent: opacity } : undefined))
       mesh.castShadow = options?.castShadow ?? opacity >= 1
+      // Bewegliche Modelle beschatten sich selbst: erst dadurch sitzt eine Figur
+      // im Bild auf dem Boden, statt darauf zu schweben. Glas bleibt aussen vor.
+      mesh.receiveShadow = opacity >= 1
       parent.add(mesh)
       for (const geometry of geometries) geometry.dispose()
     }

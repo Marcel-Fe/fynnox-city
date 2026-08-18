@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { COLORS, mat } from './Palette'
+import { COLORS, mat, setLookDetail } from './Palette'
 import { CollisionWorld, type Collider } from './CollisionWorld'
 import { buildDistrict, type DistrictAnchors } from '../world/District'
 import { Water } from '../world/Water'
@@ -85,8 +85,12 @@ export class Game {
     this.renderer.shadowMap.enabled = true
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap
     this.renderer.outputColorSpace = THREE.SRGBColorSpace
-    this.renderer.toneMapping = THREE.ACESFilmicToneMapping
-    this.renderer.toneMappingExposure = 1.05
+    // ACES ist fuer Film gebaut und zieht kraeftigen Farben in den Lichtern die
+    // Saettigung weg - genau das, wovon dieser Stil lebt. Die Khronos-neutrale
+    // Kurve komprimiert die Lichter genauso weich, laesst den Farbton aber
+    // stehen. Fuer Teal, Koralle und Orange ist der Unterschied deutlich.
+    this.renderer.toneMapping = THREE.NeutralToneMapping
+    this.renderer.toneMappingExposure = 1.1
     this.renderer.domElement.className = 'scene'
     container.appendChild(this.renderer.domElement)
 
@@ -237,6 +241,11 @@ export class Game {
       setCameraYaw: (yaw: number) => {
         this.rig.yaw = yaw
       },
+      // Spiegelt den Schalter "Hohe Detailstufe" aus dem Pausemenue. Noetig,
+      // weil Headless-Chromium wenige Kerne meldet und die Automatik deshalb
+      // immer die niedrige Stufe waehlt - sonst pruefte die Abnahme nie das,
+      // was ein Spieler am Rechner sieht.
+      setDetail: (high: boolean) => setLookDetail(high),
       save: () => this.save(true),
       closeOnboarding: () => this.hud.closeOnboarding(),
       talk: () => this.talkToMira(),
@@ -686,6 +695,7 @@ export class Game {
   private applySettings(settings: Settings): void {
     this.rig.reducedMotion = settings.reducedMotion
     this.rig.sensitivity = settings.sensitivity
+    setLookDetail(settings.highDetail)
   }
 
   private refreshWallet(): void {

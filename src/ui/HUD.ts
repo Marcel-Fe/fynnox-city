@@ -1,5 +1,6 @@
 import { iconFileByAction, minimumBodyTextPx, minimumTouchTargetPx } from '../contracts/manifests'
 import type { HudStateId, UiActionId } from '../contracts/types'
+import { detectHighDetail } from '../core/Palette'
 import type { InputManager, VirtualButton } from '../input/InputManager'
 
 export interface Settings {
@@ -9,6 +10,8 @@ export interface Settings {
   shapeAndColor: boolean
   driveAssist: boolean
   sensitivity: number
+  /** Zweite Rauschoktave im Material. Vorbelegt nach Geraeteklasse. */
+  highDetail: boolean
   /** hud_safe_area_debug: Zustandsanzeige fuer Entwicklung und QA. */
   debugOverlay: boolean
 }
@@ -20,6 +23,10 @@ export const DEFAULT_SETTINGS: Settings = {
   shapeAndColor: true,
   driveAssist: true,
   sensitivity: 1,
+  // Zielbild sind Desktop und Tablet. Auf einem schwachen Telefon startet der
+  // Schalter aus - anschalten kann man ihn trotzdem, es ist eine Vorbelegung
+  // und keine Sperre.
+  highDetail: detectHighDetail(),
   debugOverlay: false,
 }
 
@@ -313,6 +320,7 @@ export class HUD {
       { key: 'reducedMotion', label: 'Reduzierte Bewegung', hint: 'Schaltet Kamerablenden und Animationen der UI ab.' },
       { key: 'shapeAndColor', label: 'Form plus Farbe', hint: 'Kartenmarker bekommen zusaetzlich eine eigene Form.' },
       { key: 'driveAssist', label: 'Fahrhilfe', hint: 'Begrenzt Lenkeinschlag und Hoechstgeschwindigkeit.' },
+      { key: 'highDetail', label: 'Hohe Detailstufe', hint: 'Feine Oberflaechenstruktur. Auf schwachen Geraeten aus.' },
       { key: 'debugOverlay', label: 'Zustandsanzeige', hint: 'Zeigt Kontext, Boarding-Schritt und Kameraprofil.' },
     ]
     for (const toggle of toggles) {
@@ -352,7 +360,8 @@ export class HUD {
     card.appendChild(row)
   }
 
-  applyLoadedSettings(settings: Settings): void {
+  /** Nimmt auch unvollstaendige Staende: fehlende Felder kommen aus den Vorgaben. */
+  applyLoadedSettings(settings: Partial<Settings>): void {
     this.settings = { ...DEFAULT_SETTINGS, ...settings }
     for (const element of Array.from(this.root.querySelectorAll('.switch'))) {
       const label = element.getAttribute('aria-label')

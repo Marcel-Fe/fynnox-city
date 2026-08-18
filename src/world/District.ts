@@ -56,6 +56,12 @@ interface BuildingOptions {
   /** Erdgeschoss mit Schaufenstern (4,0 m) statt Wohngeschoss. */
   shopFront?: boolean
   roofAccessible?: boolean
+  /**
+   * Balkone und Erker an der Strassenseite. Fuer den Parkourblock aus:
+   * dort haengen Markise, Kletterbalkone und Dachkante an derselben Wand,
+   * und zwei Balkone auf 4,6 m durchdringen sich sichtbar.
+   */
+  frontDecor?: boolean
 }
 
 function buildingHeight(options: BuildingOptions): number {
@@ -78,6 +84,8 @@ export function buildDistrict(scene: THREE.Scene, collision: CollisionWorld): Di
     wallColor: COLORS.wallCream,
     shopFront: true,
     roofAccessible: true,
+    // An dieser Wand haengt die Kletterlinie der Parkourroute.
+    frontDecor: false,
   })
   const blockB = buildFacadeBuilding(b, {
     x0: 20,
@@ -354,20 +362,82 @@ function buildFacadeBuilding(
   // Innenfuellung, damit durch Fenster keine leere Huelle zu sehen ist.
   wall(cx, 0, cz, w - 0.5, height, d - 0.5, COLORS.navyMid)
 
+  // Sockel aus Naturstein: in den Referenzen steht kein Haus ohne Fusspunkt
+  // direkt auf dem Pflaster.
+  wall(cx, 0, cz, w + 0.24, 0.55, d + 0.24, COLORS.stoneShade)
+  // Ecklisenen ueber die volle Hoehe - das Merkmal, an dem die Fassadenmodule
+  // des Pakets als eine Fassade und nicht als ein Quader lesen.
+  for (const [lx, lz] of [
+    [x0 + 0.22, z0 + 0.22],
+    [x0 + w - 0.22, z0 + 0.22],
+    [x0 + 0.22, z0 + d - 0.22],
+    [x0 + w - 0.22, z0 + d - 0.22],
+  ]) {
+    wall(lx, 0, lz, 0.56, height, 0.56, COLORS.stone)
+  }
+  // Gesimsband ueber dem Erdgeschoss und Kranzgesims unter der Dachkante.
+  wall(cx, groundHeight - 0.18, cz, w + 0.34, 0.34, d + 0.34, COLORS.stone)
+  wall(cx, height - 0.5, cz, w + 0.5, 0.5, d + 0.5, COLORS.stone)
+
   // Fenster im 2,5-m-Fassadenraster, Standardfenster 1,2 x 1,5 m.
   const columns = Math.floor(w / FACADE_MODULE)
   const rows = options.floors - 1
+  /**
+   * Fenster mit Laibung und Bank. Der Rahmen besteht aus vier Staeben, nicht
+   * aus einer Platte: eine Platte vor dem Glas verdeckt das Fenster
+   * vollstaendig, eine Platte dahinter ist nicht zu sehen. Nur der Rahmen aus
+   * Einzelteilen darf vorstehen und laesst die Oeffnung frei.
+   */
+  const facadeWindow = (
+    x: number,
+    y: number,
+    z: number,
+    ww: number,
+    hh: number,
+    facing: 'z' | 'x',
+    frameColor: string = COLORS.stone,
+  ) => {
+    const alongZ = facing === 'z'
+    const sign = alongZ ? (z > cz ? 1 : -1) : x > cx ? 1 : -1
+    const bar = 0.18
+    // Rahmenebene steht 4 cm vor der Glasebene.
+    const fx = alongZ ? x : x + sign * 0.04
+    const fz = alongZ ? z + sign * 0.04 : z
+    const put = (px: number, py: number, pz: number, pw: number, ph: number, color: string) =>
+      wall(px, py, pz, alongZ ? pw : 0.2, ph, alongZ ? 0.2 : pw, color)
+
+    put(fx, y + hh, fz, ww + 2 * bar, bar, frameColor)
+    for (const side of [-1, 1]) {
+      const offset = (side * (ww + bar)) / 2
+      put(alongZ ? fx + offset : fx, y, alongZ ? fz : fz + offset, bar, hh, frameColor)
+    }
+    // Fensterbank mit Ueberstand, deutlich tiefer als der Rahmen.
+    wall(
+      alongZ ? fx : fx + sign * 0.04,
+      y - bar,
+      alongZ ? fz + sign * 0.04 : fz,
+      alongZ ? ww + 2 * bar + 0.24 : 0.3,
+      bar,
+      alongZ ? 0.3 : ww + 2 * bar + 0.24,
+      COLORS.stoneShade,
+    )
+    wall(x, y, z, alongZ ? ww : 0.12, hh, alongZ ? 0.12 : ww, COLORS.glass)
+  }
+
   for (let c = 0; c < columns; c++) {
     const x = x0 + (w - columns * FACADE_MODULE) / 2 + c * FACADE_MODULE + FACADE_MODULE / 2
     if (shopFront) {
-      // Schaufensterfeld 2,5 x 2,6 m.
-      wall(x, 0.6, z0 + d - 0.05, 2.2, 2.6, 0.12, COLORS.glass)
-      wall(x, 0.6, z0 + 0.05, 2.2, 2.6, 0.12, COLORS.glass)
+      // Schaufensterfeld 2,2 x 2,6 m im Holzrahmen, mit Sturzband darueber.
+      for (const z of [z0 + d - 0.05, z0 + 0.05]) {
+        const sign = z > cz ? 1 : -1
+        facadeWindow(x, 0.6, z, 2.2, 2.6, 'z', COLORS.wood)
+        wall(x, 3.42, z + sign * 0.05, 2.7, 0.26, 0.26, COLORS.stone)
+      }
     }
     for (let r = 0; r < rows; r++) {
       const y = groundHeight + r * FLOOR_HEIGHT + 0.9
-      wall(x, y, z0 + d - 0.05, 1.2, 1.5, 0.12, COLORS.glass)
-      wall(x, y, z0 + 0.05, 1.2, 1.5, 0.12, COLORS.glass)
+      facadeWindow(x, y, z0 + d - 0.05, 1.2, 1.5, 'z')
+      facadeWindow(x, y, z0 + 0.05, 1.2, 1.5, 'z')
     }
   }
   const depthColumns = Math.floor(d / FACADE_MODULE)
@@ -375,13 +445,51 @@ function buildFacadeBuilding(
     const z = z0 + (d - depthColumns * FACADE_MODULE) / 2 + c * FACADE_MODULE + FACADE_MODULE / 2
     for (let r = 0; r < rows; r++) {
       const y = groundHeight + r * FLOOR_HEIGHT + 0.9
-      wall(x0 + 0.05, y, z, 0.12, 1.5, 1.2, COLORS.glass)
-      wall(x0 + w - 0.05, y, z, 0.12, 1.5, 1.2, COLORS.glass)
+      facadeWindow(x0 + 0.05, y, z, 1.2, 1.5, 'x')
+      facadeWindow(x0 + w - 0.05, y, z, 1.2, 1.5, 'x')
     }
   }
 
-  // Einzeltuer 1,0 x 2,2 m auf der Strassenseite.
-  wall(cx + w / 2 - 1.6, 0, z0 + d - 0.02, 1.0, 2.2, 0.1, COLORS.wood)
+  // Balkone und Erker. Die Platte traegt nicht - sie haengt hoch genug, dass
+  // niemand darauf laufen will, und die Kollisionsbox bleibt der eine Quader.
+  const frontZ = z0 + d
+  if (options.frontDecor !== false) {
+    const bayX = x0 + w / 2
+    for (let r = 0; r < rows; r++) {
+      const y = groundHeight + r * FLOOR_HEIGHT
+      // Erker ueber alle Obergeschosse, Balkone links und rechts davon.
+      wall(bayX, y + 0.1, frontZ + 0.35, 2.6, FLOOR_HEIGHT - 0.5, 0.7, wallColor)
+      wall(bayX, y + 0.9, frontZ + 0.4, 2.0, 1.5, 0.14, COLORS.glass)
+      wall(bayX, y + 0.02, frontZ + 0.35, 2.9, 0.22, 0.86, COLORS.stone)
+      for (const side of [-1, 1]) {
+        const bx = bayX + side * 3.2
+        if (bx < x0 + 1 || bx > x0 + w - 1) continue
+        wall(bx, y + 0.55, frontZ + 0.55, 2.6, 0.18, 1.1, COLORS.stone)
+        b.railing({ x: bx, z: frontZ + 1.05, y: y + 0.73, length: 2.6, axis: 'x', color: COLORS.iron, collide: false })
+        for (const rail of [-1, 1]) {
+          b.railing({ x: bx + rail * 1.25, z: frontZ + 0.6, y: y + 0.73, length: 1.0, axis: 'z', color: COLORS.iron, collide: false })
+        }
+      }
+    }
+  } else {
+    // Parkourblock: Erker an die Ostseite, damit die Kletterlinie frei bleibt.
+    for (let r = 0; r < rows; r++) {
+      const y = groundHeight + r * FLOOR_HEIGHT
+      wall(x0 + w + 0.35, y + 0.1, cz, 0.7, FLOOR_HEIGHT - 0.5, 2.6, wallColor)
+      wall(x0 + w + 0.4, y + 0.9, cz, 0.14, 1.5, 2.0, COLORS.glass)
+      wall(x0 + w + 0.35, y + 0.02, cz, 0.86, 0.22, 2.9, COLORS.stone)
+    }
+  }
+
+  // Fallrohre an den Strassenecken.
+  for (const px of [x0 + 0.62, x0 + w - 0.62]) {
+    wall(px, 0.55, frontZ - 0.08, 0.16, height - 1.05, 0.16, COLORS.metal)
+  }
+
+  // Einzeltuer 1,0 x 2,2 m auf der Strassenseite, mit Gewaende und Sturz.
+  const doorX = cx + w / 2 - 1.6
+  wall(doorX, 0, frontZ + 0.03, 1.5, 2.5, 0.16, COLORS.stone)
+  wall(doorX, 0, frontZ - 0.02, 1.0, 2.2, 0.1, COLORS.wood)
 
   // Dachplatte, Gesims und Bruestung 1,1 m.
   b.box({ x: cx, y: height, z: cz, w: w + 0.4, h: 0.3, d: d + 0.4, color: COLORS.roof })
@@ -395,6 +503,34 @@ function buildFacadeBuilding(
   b.railing({ x: x0 + w - 0.1, z: cz, y: roofTop, length: d, axis: 'z', color: COLORS.metal, collide: solid })
   // Dachaufbau als Landmarke.
   b.box({ x: cx - 2, y: roofTop, z: cz - 3, w: 2.4, h: 1.6, d: 2.4, color: COLORS.metal })
+  // Dachgarten nach 11_Modulare_Bausaetze/04_Dachmodule: Schornstein, Pergola
+  // mit Berankung und ein Solarfeld. Die mittlere Bahn bei cz bleibt frei -
+  // dort laufen Dachbruecke und Sprungluecke der Parkourroute.
+  b.box({ x: cx + 3.4, y: roofTop, z: cz - 3.4, w: 0.9, h: 2.1, d: 0.9, color: COLORS.wallCoral })
+  b.box({ x: cx + 3.4, y: roofTop + 2.1, z: cz - 3.4, w: 1.1, h: 0.25, d: 1.1, color: COLORS.stoneShade, collide: false })
+  const pergolaZ = cz + 3.6
+  for (const [px, pz] of [
+    [cx - 1.8, pergolaZ - 0.9],
+    [cx + 1.8, pergolaZ - 0.9],
+    [cx - 1.8, pergolaZ + 0.9],
+    [cx + 1.8, pergolaZ + 0.9],
+  ]) {
+    b.box({ x: px, y: roofTop, z: pz, w: 0.16, h: 2.2, d: 0.16, color: COLORS.wood, collide: false })
+  }
+  for (let i = 0; i < 5; i++) {
+    b.box({
+      x: cx - 1.8 + i * 0.9,
+      y: roofTop + 2.2,
+      z: pergolaZ,
+      w: 0.12,
+      h: 0.12,
+      d: 2.1,
+      color: COLORS.wood,
+      collide: false,
+    })
+  }
+  b.box({ x: cx, y: roofTop + 2.32, z: pergolaZ, w: 3.9, h: 0.3, d: 2.1, color: COLORS.foliage, collide: false })
+  b.box({ x: cx - 3.6, y: roofTop, z: pergolaZ, w: 2.2, h: 0.06, d: 1.6, color: COLORS.solarPanel, collide: false })
 
   return { x0, z0, w, d, height: roofTop }
 }
@@ -620,6 +756,57 @@ function buildHarborDocks(b: WorldBuilder): void {
   }
   b.box({ x: -2.5, y: 0.15, z: 43.4, w: 2.4, h: 2.4, d: 2.4, color: COLORS.cream })
   b.box({ x: -2.5, y: 2.55, z: 43.4, w: 2.8, h: 0.3, d: 2.8, color: COLORS.roof })
+
+  // Werftmoeblierung. Alles bleibt ausserhalb der Einstiegsanker der drei
+  // Wasserfahrzeuge: der Skyfin steigt bei etwa (-11,6 / 43,9) ein, der Scout
+  // bei (4,2 / 42,8). Steht dort etwas, verweigert die Kette den Einstieg -
+  // richtig, aber aus dem falschen Grund.
+  // Dalben mit Tauen entlang der Nordkante des Laengsstegs.
+  const pileX = [-15, -10, -5, 0, 5]
+  for (const px of pileX) {
+    b.box({ x: px, y: 0.15, z: 38.6, w: 0.3, h: 1.7, d: 0.3, color: COLORS.wood })
+    b.box({ x: px, y: 1.85, z: 38.6, w: 0.42, h: 0.14, d: 0.42, color: COLORS.stoneShade, collide: false })
+  }
+  for (let i = 0; i < pileX.length - 1; i++) {
+    const from = pileX[i]
+    b.box({
+      x: from + 2.5,
+      y: 1.28,
+      z: 38.6,
+      w: 5,
+      h: 0.07,
+      d: 0.07,
+      color: COLORS.fynnoxLeather,
+      collide: false,
+    })
+  }
+  // Fender an der Stegkante - dieselbe Rolle wie am Wassertaxi.
+  for (const fx of [-12.5, -7.5, -2.5, 2.5]) {
+    b.box({ x: fx, y: -0.5, z: 39.1, w: 0.34, h: 0.5, d: 0.16, color: COLORS.tyre, collide: false })
+  }
+  // Ladekran am Westende: Mast, Ausleger, Hubseil, Haken.
+  b.box({ x: -15.4, y: 0.15, z: 36.6, w: 1.1, h: 0.35, d: 1.1, color: COLORS.metal })
+  b.box({ x: -15.4, y: 0.5, z: 36.6, w: 0.34, h: 3.9, d: 0.34, color: COLORS.coral })
+  b.box({ x: -14.1, y: 4.15, z: 36.6, w: 3.0, h: 0.26, d: 0.26, color: COLORS.coral, collide: false })
+  b.box({ x: -12.8, y: 2.3, z: 36.6, w: 0.06, h: 1.85, d: 0.06, color: COLORS.metal, collide: false })
+  b.box({ x: -12.8, y: 2.0, z: 36.6, w: 0.26, h: 0.32, d: 0.26, color: COLORS.metal, collide: false })
+  // Kisten und Fassware neben dem Geraeteschuppen.
+  // Die Kisten stehen auf dem Ponton (x -4 bis 5, z 39 bis 45), nicht daneben
+  // im Wasser, und westlich des Geraeteschuppens bei z 42,2.
+  for (const [kx, ky, kz, kh, color] of [
+    [-3.0, 0.15, 40.5, 0.9, COLORS.wood],
+    [-1.7, 0.15, 40.4, 0.9, COLORS.gold],
+    // Zweite Lage auf der ersten Kiste.
+    [-3.0, 1.05, 40.5, 0.7, COLORS.coral],
+    [-0.6, 0.15, 44.0, 0.8, COLORS.wood],
+  ] as [number, number, number, number, string][]) {
+    b.box({ x: kx, y: ky, z: kz, w: 1.0, h: kh, d: 1.0, color })
+  }
+  // Aufgeschossenes Tau und Rettungsringkasten auf dem Steg.
+  b.box({ x: -8.6, y: 0.15, z: 37.6, w: 0.9, h: 0.16, d: 0.9, color: COLORS.fynnoxLeather, collide: false })
+  b.box({ x: -8.6, y: 0.31, z: 37.6, w: 0.6, h: 0.12, d: 0.6, color: COLORS.fynnoxLeather, collide: false })
+  b.box({ x: -6.2, y: 0.15, z: 38.4, w: 0.7, h: 0.9, d: 0.3, color: COLORS.coral })
+  b.box({ x: -6.2, y: 1.05, z: 38.4, w: 0.8, h: 0.12, d: 0.36, color: COLORS.cream, collide: false })
 }
 
 /**
