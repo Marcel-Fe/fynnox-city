@@ -12,6 +12,17 @@ import {
 } from '../core/Shapes'
 import type { AnimationStateId } from '../contracts/types'
 
+/**
+ * Halbe Drehung zwischen Figuren- und Fahrzeugachse.
+ *
+ * Die Figurenmodelle sind mit der Schnauze nach +Z gebaut, `heading` dreht sie
+ * deshalb ueber `atan2(vx, vz)` in die Laufrichtung. Die Fahrzeuge folgen der
+ * Paketkonvention "Vorderseite nach -Z" und fahren nach `(-sin h, -cos h)`.
+ * Wer eine Fahrzeugausrichtung ungerechnet auf eine Figur schreibt, setzt sie
+ * rueckwaerts in den Sitz - genau diese halbe Drehung fehlte.
+ */
+export const FACING_OFFSET = Math.PI
+
 const FUR = COLORS.fynnoxFur
 const FUR_DARK = COLORS.fynnoxFurDark
 const CREAM = COLORS.fynnoxBelly

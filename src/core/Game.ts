@@ -252,6 +252,10 @@ export class Game {
       dialogueNext: () => this.dialogue.advance(),
       state: () => ({
         player: this.player.position.toArray(),
+        // Blickrichtung der Figur. Sie steht in der Figurenachse (+Z), waehrend
+        // Fahrzeuge nach -Z zeigen - ohne den Wert im Zustand laesst sich ein
+        // verdrehter Sitz nur am Bild ablesen, nicht pruefen.
+        playerHeading: this.player.heading,
         grounded: this.player.grounded,
         vehicle: this.vehicle.position.toArray(),
         waterTaxi: this.waterTaxi.position.toArray(),
@@ -267,6 +271,7 @@ export class Game {
         scoutSurfaced: this.scout.isSurfaced,
         scoutHatchLocked: this.scout.hatchLocked,
         activeVehicle: this.boarding.vehicle?.id ?? null,
+        activeVehicleHeading: this.boarding.vehicle?.heading ?? null,
         harborTask: this.harborTask,
         dialogue: this.dialogue.isActive,
         dialogueSpeaker: this.dialogue.speaker,

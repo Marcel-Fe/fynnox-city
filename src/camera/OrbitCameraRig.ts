@@ -121,7 +121,10 @@ export class OrbitCameraRig {
   /** Richtung, in die die Kamera schaut - Basis der Bewegungsrichtung. */
   getPlanarBasis(forward: THREE.Vector3, right: THREE.Vector3): void {
     forward.set(-Math.sin(this.yaw), 0, -Math.cos(this.yaw)).normalize()
-    right.set(forward.z, 0, -forward.x).normalize()
+    // Rechts ist forward x up, also (-f.z, 0, f.x). Mit vertauschten Vorzeichen
+    // zeigt der Vektor nach links, und die Basis wird linkshaendig: A und D
+    // laufen dann vertauscht, und jede Diagonale spiegelt mit.
+    right.set(-forward.z, 0, forward.x).normalize()
   }
 
   update(delta: number, target: THREE.Vector3, height = ON_FOOT.height): void {

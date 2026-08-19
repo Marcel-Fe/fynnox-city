@@ -5,6 +5,7 @@ import { inputContext } from '../state/InputContext'
 import type { CollisionWorld } from '../core/CollisionWorld'
 import type { OrbitCameraRig } from '../camera/OrbitCameraRig'
 import type { PlayerController } from '../player/PlayerController'
+import { FACING_OFFSET } from '../player/FynnoxModel'
 import { controlCameraDistance, resolveSockets, type BoardableVehicle } from './BoardableVehicle'
 
 export type BoardingPhase = 'on_foot' | 'entering' | 'seated' | 'exiting'
@@ -138,7 +139,9 @@ export class BoardingController {
           this.from.copy(this.player.position)
           this.to.copy(seat).add(vehicle.seatOffset)
           this.headingFrom = this.player.heading
-          this.headingTo = vehicle.heading
+          // Fahrzeugachse in die Figurenachse umrechnen, sonst dreht sich
+          // Fynnox beim Hinsetzen mit dem Ruecken zur Fahrtrichtung.
+          this.headingTo = vehicle.heading + FACING_OFFSET
         },
         during: (t) => this.lerpPlayer(t),
       },
@@ -160,6 +163,13 @@ export class BoardingController {
         seconds: 0,
         enter: () => {
           this.phase = 'seated'
+          // Die Kamera hinter das Fahrzeug drehen. Ohne das behaelt sie den
+          // Blickwinkel des Fussgaengers - und weil man von vorn auf ein
+          // Fahrzeug zulaeuft, sieht man ihm nach dem Einsteigen entgegen:
+          // Gas faehrt dann scheinbar rueckwaerts und die Lenkung spiegelt.
+          // Der Socket camera_drive des Manifests liegt genau dort, hinter dem
+          // Heck; die Position wird vom Blend weich angefahren.
+          this.rig.yaw = vehicle.heading
           this.rig.blendTo(spec.control_camera)
           this.rig.setDistance(controlCameraDistance(vehicle.id))
           this.onEvent(`${vehicle.label} bereit.`)
@@ -365,9 +375,9 @@ export class BoardingController {
     if (!vehicle) return
     const seat = vehicle.socketWorld(resolveSockets(vehicle.id).seat)
     this.player.position.copy(seat).add(vehicle.seatOffset)
-    this.player.heading = vehicle.heading
+    this.player.heading = vehicle.heading + FACING_OFFSET
     this.player.model.root.position.copy(this.player.position)
-    this.player.model.root.rotation.y = vehicle.heading
+    this.player.model.root.rotation.y = this.player.heading
   }
 
   private groundAt(point: THREE.Vector3): number {
