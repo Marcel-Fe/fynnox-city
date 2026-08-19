@@ -11,6 +11,7 @@ import {
   torus,
 } from '../core/Shapes'
 import type { AnimationStateId } from '../contracts/types'
+import { applyPose, type FigureParts, type PlayerFigure } from './FynnoxPose'
 
 /**
  * Halbe Drehung zwischen Figuren- und Fahrzeugachse.
@@ -60,19 +61,18 @@ const HEAD_Y = 0.56
  * Die Gelenkpivots sind unveraendert gegenueber dem Graybox-Vorgaenger, damit
  * die Animationszustaende weiter passen.
  */
-export class FynnoxModel {
+export class FynnoxModel implements PlayerFigure, FigureParts {
   readonly root = new THREE.Group()
-  private readonly hip = new THREE.Group()
-  private readonly torso = new THREE.Group()
-  private readonly head = new THREE.Group()
-  private readonly armL = new THREE.Group()
-  private readonly armR = new THREE.Group()
-  private readonly legL = new THREE.Group()
-  private readonly legR = new THREE.Group()
-  private readonly tail = new THREE.Group()
+  readonly hip = new THREE.Group()
+  readonly torso = new THREE.Group()
+  readonly head = new THREE.Group()
+  readonly armL = new THREE.Group()
+  readonly armR = new THREE.Group()
+  readonly legL = new THREE.Group()
+  readonly legR = new THREE.Group()
+  readonly tail = new THREE.Group()
   private state: AnimationStateId = 'fox_idle'
   private clock = 0
-  private blend = 0
 
   constructor() {
     this.hip.position.y = HIP_Y
@@ -254,7 +254,6 @@ export class FynnoxModel {
   setState(state: AnimationStateId): void {
     if (this.state === state) return
     this.state = state
-    this.blend = 0
   }
 
   get currentState(): AnimationStateId {
@@ -263,90 +262,6 @@ export class FynnoxModel {
 
   update(delta: number, planarSpeed: number): void {
     this.clock += delta
-    this.blend = Math.min(1, this.blend + delta * 6)
-
-    const stride = this.state === 'fox_sprint' ? 12 : 8
-    const swing = Math.sin(this.clock * stride) * Math.min(1, planarSpeed / 3)
-
-    // Grundhaltung.
-    this.torso.rotation.x = 0
-    this.torso.position.y = 0
-    this.armL.rotation.set(0, 0, 0)
-    this.armR.rotation.set(0, 0, 0)
-    this.legL.rotation.x = 0
-    this.legR.rotation.x = 0
-    this.head.rotation.x = 0
-
-    switch (this.state) {
-      case 'fox_walk':
-      case 'fox_run_start':
-      case 'fox_sprint': {
-        this.legL.rotation.x = swing
-        this.legR.rotation.x = -swing
-        this.armL.rotation.x = -swing * 0.8
-        this.armR.rotation.x = swing * 0.8
-        this.torso.rotation.x = Math.min(0.18, planarSpeed * 0.035)
-        this.hip.position.y = HIP_Y + Math.abs(Math.sin(this.clock * stride)) * 0.03
-        break
-      }
-      case 'fox_jump_start':
-      case 'fox_jump_air': {
-        this.legL.rotation.x = -0.7
-        this.legR.rotation.x = -0.3
-        this.armL.rotation.x = -1.6
-        this.armR.rotation.x = -1.4
-        break
-      }
-      case 'fox_land_soft': {
-        this.hip.position.y = HIP_Y - 0.12
-        this.legL.rotation.x = 0.35
-        this.legR.rotation.x = 0.35
-        break
-      }
-      case 'fox_ledge_grab':
-      case 'fox_climb_up': {
-        this.armL.rotation.x = -2.4
-        this.armR.rotation.x = -2.4
-        this.legL.rotation.x = 0.5
-        this.legR.rotation.x = 0.2
-        break
-      }
-      case 'fox_scan': {
-        this.armR.rotation.x = -1.5
-        this.armL.rotation.x = -0.4
-        this.head.rotation.x = -0.15
-        break
-      }
-      case 'fox_pickup':
-      case 'fox_press_button':
-      case 'fox_open_door': {
-        this.armR.rotation.x = -1.1
-        this.torso.rotation.x = 0.25
-        break
-      }
-      case 'fox_drive_vehicle':
-      case 'fox_enter_vehicle': {
-        this.legL.rotation.x = -1.4
-        this.legR.rotation.x = -1.4
-        this.armL.rotation.x = -1.1
-        this.armR.rotation.x = -1.1
-        this.hip.position.y = HIP_Y - 0.1
-        break
-      }
-      case 'fox_wave': {
-        this.armR.rotation.x = -2.2
-        this.armR.rotation.z = Math.sin(this.clock * 8) * 0.3
-        break
-      }
-      default: {
-        this.hip.position.y = HIP_Y + Math.sin(this.clock * 1.8) * 0.012
-        this.armL.rotation.x = Math.sin(this.clock * 1.8) * 0.05
-        this.armR.rotation.x = -Math.sin(this.clock * 1.8) * 0.05
-      }
-    }
-
-    // Schweif als Sekundaerbewegung - laeuft in jedem Zustand weiter.
-    this.tail.rotation.y = Math.sin(this.clock * 2.2) * 0.28
-    this.tail.rotation.x = -0.35 + Math.sin(this.clock * 3.1) * 0.12 - planarSpeed * 0.03
+    applyPose(this, this.state, this.clock, planarSpeed, HIP_Y)
   }
 }
