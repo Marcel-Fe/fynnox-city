@@ -23,12 +23,52 @@ export interface BoxOptions {
  * Mobilgeraeten der schnellste Weg in die Ruckelzone.
  */
 export class WorldBuilder {
-  private readonly batches = new Map<string, THREE.BufferGeometry[]>()
+  private readonly batches = new Map<string, { color: string; parts: THREE.BufferGeometry[] }>()
 
   constructor(
     private readonly scene: THREE.Scene,
     private readonly collision: CollisionWorld,
   ) {}
+
+  /**
+   * Beliebige Geometrie in den Batch legen - Zylinder, Kugel, Kegel, Torus.
+   *
+   * `box()` reicht fuer Waende, aber nicht fuer den Leuchtturmschaft oder eine
+   * Baumkrone: ein runder Koerper aus Quadern liest als Quader, egal wie viele.
+   * Der Batch-Schluessel traegt zusaetzlich zur Farbe, ob die Geometrie
+   * indiziert ist - mergeGeometries verweigert die Mischung und liefert
+   * stillschweigend null, die betroffenen Teile fehlten dann einfach.
+   */
+  shape(
+    source: THREE.BufferGeometry,
+    color: string,
+    place: { pos?: [number, number, number]; rot?: [number, number, number]; scale?: [number, number, number] } = {},
+    options: { collide?: boolean; tag?: string } = {},
+  ): THREE.Box3 {
+    const matrix = new THREE.Matrix4()
+    const quaternion = new THREE.Quaternion()
+    if (place.rot) quaternion.setFromEuler(new THREE.Euler(place.rot[0], place.rot[1], place.rot[2]))
+    matrix.compose(
+      new THREE.Vector3(...(place.pos ?? [0, 0, 0])),
+      quaternion,
+      new THREE.Vector3(...(place.scale ?? [1, 1, 1])),
+    )
+    source.applyMatrix4(matrix)
+    this.push(source, color)
+
+    const bounds = new THREE.Box3().setFromBufferAttribute(
+      source.getAttribute('position') as THREE.BufferAttribute,
+    )
+    if (options.collide) this.collision.addStatic(bounds.clone(), options.tag ?? 'world')
+    return bounds
+  }
+
+  private push(geometry: THREE.BufferGeometry, color: string): void {
+    const key = `${color}|${geometry.index ? 'i' : 'n'}`
+    const batch = this.batches.get(key)
+    if (batch) batch.parts.push(geometry)
+    else this.batches.set(key, { color, parts: [geometry] })
+  }
 
   box(options: BoxOptions): THREE.Box3 {
     const { x, y, z, w, h, d, color, collide = true, tag = 'world', rotY = 0 } = options
@@ -38,9 +78,7 @@ export class WorldBuilder {
     matrix.setPosition(x, y + h / 2, z)
     geometry.applyMatrix4(matrix)
 
-    const batch = this.batches.get(color)
-    if (batch) batch.push(geometry)
-    else this.batches.set(color, [geometry])
+    this.push(geometry, color)
 
     const bounds = new THREE.Box3().setFromBufferAttribute(
       geometry.getAttribute('position') as THREE.BufferAttribute,
@@ -141,9 +179,11 @@ export class WorldBuilder {
   }
 
   finish(): void {
-    for (const [color, geometries] of this.batches) {
+    for (const { color, parts: geometries } of this.batches.values()) {
       const merged = mergeGeometries(geometries, false)
-      if (!merged) continue
+      if (!merged) {
+        throw new Error(`Batch ${color} liess sich nicht verschmelzen`)
+      }
       const mesh = new THREE.Mesh(merged, mat(color))
       mesh.castShadow = true
       mesh.receiveShadow = true

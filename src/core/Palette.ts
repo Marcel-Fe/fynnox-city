@@ -36,6 +36,26 @@ export const COLORS = {
   foliageDark: '#3F7A4B',
   bloom: '#E4708F',
   metal: '#8E9AA6',
+  // Bauwerke nach 10_Bauwerke_und_Infrastruktur. Leuchtturm und Uhrpavillon
+  // tragen gruene Kupferpatina, der Pavillon zusaetzlich Bronzegesimse.
+  patina: '#2E5A52',
+  patinaLight: '#8FA893',
+  bronze: '#A9743C',
+  bronzeDark: '#7E522A',
+  /** Laternenfeuer des Leuchtturms. Hell genug, um in den Blueten zu stehen. */
+  lanternGlow: '#FFEDB4',
+  // Vegetation nach 23_Natur_und_Kleinobjekte/01_Vegetation. Die Kronen sind
+  // dort nie einfarbig - Sonnenseite hell, Kern dunkel.
+  foliageLight: '#7FBB6A',
+  pineNeedle: '#3C6B45',
+  palmFrond: '#6FA95C',
+  ivy: '#4C7F42',
+  /** Bluetenbaum: zartrosa. Das kraeftige `bloom` gehoert an kleine Akzente -
+   *  ueber eine ganze Krone gelegt liest es als Magenta, nicht als Bluete. */
+  blossom: '#F0A9BE',
+  /** Platanenstamm: hell und gefleckt, nicht braun wie ein Balken. */
+  barkPale: '#D6CBAE',
+  barkDark: '#7C5330',
   // Fynnox: Fell, Gesicht und Outfit sind gesperrte Designvorgaben des Pakets
   // (03_Bildreferenzen/03_Fynnox_Turnaround). Werte hier abgelesen, nicht erfunden.
   fynnoxFur: '#E0703A',

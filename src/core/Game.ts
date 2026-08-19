@@ -5,6 +5,7 @@ import { PostFx } from './PostFx'
 import { buildDistrict, type DistrictAnchors } from '../world/District'
 import { Water } from '../world/Water'
 import { SkySystem } from '../world/Sky'
+import { AmbientMotion } from '../world/AmbientMotion'
 import { PlayerController } from '../player/PlayerController'
 import { OrbitCameraRig } from '../camera/OrbitCameraRig'
 import { InputManager } from '../input/InputManager'
@@ -52,6 +53,7 @@ export class Game {
   private readonly anchors: DistrictAnchors
   private readonly water: Water
   private readonly sky: SkySystem
+  private readonly motion: AmbientMotion
   private readonly rig: OrbitCameraRig
   private readonly player: PlayerController
   private readonly vehicle: CitySpark
@@ -101,6 +103,7 @@ export class Game {
     this.sky = new SkySystem(this.scene)
     this.anchors = buildDistrict(this.scene, this.collision)
     this.water = new Water(this.scene)
+    this.motion = new AmbientMotion(this.scene, this.anchors.motion, this.anchors.basin)
 
     // Erst hier: der Composer braucht Szene und Kamera, und beide stehen erst
     // nach dem Weltaufbau fest.
@@ -261,6 +264,7 @@ export class Game {
         this.post.setEnabled(high)
       },
       postEnabled: () => this.post.enabled,
+      motion: () => this.motion.debugState(),
       save: () => this.save(true),
       closeOnboarding: () => this.hud.closeOnboarding(),
       talk: () => this.talkToMira(),
@@ -336,6 +340,7 @@ export class Game {
     // Die Welt laeuft immer weiter - auch im Menue, im Dialog und beim Boarding.
     this.water.update(elapsed)
     this.sky.update(delta, this.player.position)
+    this.motion.update(delta)
     this.npcs.update(delta, this.player.position)
     this.puzzle.update(delta)
     this.fountain.update(delta)

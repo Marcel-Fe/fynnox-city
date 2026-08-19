@@ -97,13 +97,18 @@ check('Diagonale vorne-rechts spiegelt nicht',
   `dx=${diagonal.dx.toFixed(2)} dz=${diagonal.dz.toFixed(2)}`)
 
 // --- 2. Fynnox sitzt vorwaerts im Fahrzeug -------------------------------
-// Die Kamera blickt dem Auto absichtlich entgegen: genau so kommt ein Spieler
-// beim Fahrzeug an, und genau dann faellt eine nicht mitgedrehte Kamera auf.
-await page.evaluate(() => {
-  window.fynnoxQa.placeVehicle(20, 0, -12, 0)
-  window.fynnoxQa.teleport(18.2, 0.2, -11.8, 0)
-  window.fynnoxQa.setCameraYaw(Math.PI)
-})
+// Das Auto steht auf der Hauptstrasse und zeigt nach Osten: dort hat es 40 m
+// freie Bahn. Nach Norden gerichtet faehrt es nach wenigen Metern gegen den
+// Gehweg und die Hecke vor den Schaufenstern - dann misst der Lenktest die
+// Kollisionsbremse statt die Lenkung.
+const CAR_HEADING = -Math.PI / 2
+await page.evaluate((heading) => {
+  window.fynnoxQa.placeVehicle(10, 0, -12, heading)
+  // Einstiegsanker entry_driver liegt bei heading -PI/2 auf (-0.2, 0, -1.5)
+  // relativ zum Rumpf.
+  window.fynnoxQa.teleport(9.8, 0.2, -13.6, 0)
+  window.fynnoxQa.setCameraYaw(Math.PI / 2)
+}, CAR_HEADING)
 await frames(8)
 await page.evaluate(() => window.fynnoxQa.press('enterExit'))
 const seated = await untilFrames((s) => s.boarding === 'seated', 60, 6)
@@ -116,31 +121,75 @@ const facing = Math.abs(norm(seated.playerHeading - seated.activeVehicleHeading)
 check('Fynnox sitzt in Fahrtrichtung', Math.abs(facing - Math.PI) < 0.05,
   `differenz=${facing.toFixed(3)} rad, erwartet ${Math.PI.toFixed(3)}`)
 
-const camBehind = [
+// Fahrzeugachse: die Front zeigt nach (-sin h, -cos h), rechts davon liegt
+// (cos h, -sin h). Beide Richtungen aus dem Heading zu rechnen haelt den Test
+// unabhaengig davon, wie das Auto im Weltraster steht.
+const front = (h) => [-Math.sin(h), -Math.cos(h)]
+const rightOf = (h) => [Math.cos(h), -Math.sin(h)]
+const dot = (a, b) => a[0] * b[0] + a[1] * b[1]
+
+const camVec = [
   seated.cameraPosition[0] - seated.vehicle[0],
   seated.cameraPosition[2] - seated.vehicle[2],
 ]
-// Fahrzeug mit heading 0 zeigt nach -Z, hinter ihm liegt +Z.
+// Hinter dem Fahrzeug heisst: entgegen der Front.
 check('Kamera steht nach dem Einsteigen hinter dem Fahrzeug',
-  camBehind[1] > 2 && Math.abs(camBehind[0]) < 2,
-  `dx=${camBehind[0].toFixed(2)} dz=${camBehind[1].toFixed(2)}`)
+  dot(camVec, front(seated.activeVehicleHeading)) < -2,
+  `abstand nach hinten=${(-dot(camVec, front(seated.activeVehicleHeading))).toFixed(2)} m`)
 
-// --- 3. Fahrtrichtungen gegen die Kamera ---------------------------------
+// --- 3. Fahrtrichtungen gegen die Fahrzeugachse --------------------------
 const beforeGas = await state()
 await stick(0, 1)
 await frames(18)
 const afterGas = await state()
+const gasMove = [afterGas.vehicle[0] - beforeGas.vehicle[0], afterGas.vehicle[2] - beforeGas.vehicle[2]]
 check('Gas faehrt nach vorn, weg von der Kamera',
-  afterGas.vehicle[2] - beforeGas.vehicle[2] < -1.5,
-  `dz=${(afterGas.vehicle[2] - beforeGas.vehicle[2]).toFixed(2)}`)
+  dot(gasMove, front(CAR_HEADING)) > 1.5 && dot(gasMove, front(CAR_HEADING)) > 0,
+  `${dot(gasMove, front(CAR_HEADING)).toFixed(2)} m voraus`)
 
+const h0 = afterGas.activeVehicleHeading
 await stick(1, 1)
-await frames(22)
+await frames(18)
 const afterSteer = await state()
-check('Lenken nach rechts zieht nach rechts',
-  afterSteer.vehicle[0] - afterGas.vehicle[0] > 0.8,
-  `dx=${(afterSteer.vehicle[0] - afterGas.vehicle[0]).toFixed(2)}, heading ${afterGas.activeVehicleHeading.toFixed(2)} -> ${afterSteer.activeVehicleHeading.toFixed(2)}`)
+const steerMove = [afterSteer.vehicle[0] - afterGas.vehicle[0], afterSteer.vehicle[2] - afterGas.vehicle[2]]
+// Rechtsdrehung heisst abnehmendes Heading; die Fahrspur muss zusaetzlich
+// nach rechts der urspruenglichen Front ausweichen.
+const turned = Math.atan2(Math.sin(afterSteer.activeVehicleHeading - h0), Math.cos(afterSteer.activeVehicleHeading - h0))
+check('Lenken nach rechts dreht das Fahrzeug nach rechts', turned < -0.2,
+  `${turned.toFixed(2)} rad`)
+check('Lenken nach rechts traegt das Fahrzeug nach rechts',
+  dot(steerMove, rightOf(h0)) > 0.3,
+  `${dot(steerMove, rightOf(h0)).toFixed(2)} m nach rechts`)
 await stick(0, 0)
+
+// --- 4. Die Welt bewegt sich ---------------------------------------------
+// Bewegung ist im Standbild nicht pruefbar; hier zaehlen die Werte zwischen
+// zwei Messungen, nicht das Bild.
+const motionA = await page.evaluate(() => window.fynnoxQa.motion())
+await frames(16)
+const motionB = await page.evaluate(() => window.fynnoxQa.motion())
+
+const gullMoved = motionA.gulls.map((p, i) => {
+  const q = motionB.gulls[i]
+  return Math.hypot(q[0] - p[0], q[1] - p[1], q[2] - p[2])
+})
+check('Moewen fliegen ihre Bahn', gullMoved.every((d) => d > 0.5),
+  gullMoved.map((d) => d.toFixed(2)).join(' / ') + ' m')
+check('Moewen bleiben ueber dem Becken', motionB.gulls.every((p) => p[1] > 3 && p[1] < 20),
+  motionB.gulls.map((p) => p[1].toFixed(1)).join(' / ') + ' m hoch')
+
+const tiltMoved = motionA.canopyTilt.some((t, i) => Math.abs(motionB.canopyTilt[i] - t) > 1e-4)
+check('Baumkronen wiegen im Wind', motionA.canopyTilt.length > 0 && tiltMoved,
+  `${motionA.canopyTilt.length} bewegte Kronen`)
+// Der Ausschlag muss klein bleiben: der Stamm steht im statischen Batch fest,
+// eine sichtbar kippende Krone risse ihn optisch mit.
+check('Kronenausschlag bleibt unter drei Grad',
+  motionB.canopyTilt.every((t) => Math.abs(t) < 0.052),
+  Math.max(...motionB.canopyTilt.map((t) => Math.abs(t))).toFixed(4) + ' rad')
+
+check('Windsack folgt derselben Windrichtung wie die Kronen',
+  Math.abs(motionB.windsock[0] - motionB.wind[0]) < 0.2,
+  `sack=${motionB.windsock[0].toFixed(2)} wind=${motionB.wind[0].toFixed(2)}`)
 
 check('Keine Konsolenfehler', errors.length === 0, errors.slice(0, 3).join(' | '))
 await browser.close()
