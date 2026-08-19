@@ -372,6 +372,7 @@ export class HUD {
         'Form plus Farbe': 'shapeAndColor',
         Fahrhilfe: 'driveAssist',
         Zustandsanzeige: 'debugOverlay',
+        'Hohe Detailstufe': 'highDetail',
       } as Record<string, keyof Settings>)[label ?? '']
       if (key) element.setAttribute('aria-checked', String(this.settings[key]))
     }

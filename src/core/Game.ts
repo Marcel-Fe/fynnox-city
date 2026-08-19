@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import { COLORS, mat, setLookDetail } from './Palette'
 import { CollisionWorld, type Collider } from './CollisionWorld'
+import { PostFx } from './PostFx'
 import { buildDistrict, type DistrictAnchors } from '../world/District'
 import { Water } from '../world/Water'
 import { SkySystem } from '../world/Sky'
@@ -44,6 +45,7 @@ interface Interactable {
 
 export class Game {
   private readonly renderer: THREE.WebGLRenderer
+  private readonly post: PostFx
   private readonly scene = new THREE.Scene()
   private readonly collision = new CollisionWorld()
   private readonly clock = new THREE.Clock()
@@ -99,6 +101,10 @@ export class Game {
     this.sky = new SkySystem(this.scene)
     this.anchors = buildDistrict(this.scene, this.collision)
     this.water = new Water(this.scene)
+
+    // Erst hier: der Composer braucht Szene und Kamera, und beide stehen erst
+    // nach dem Weltaufbau fest.
+    this.post = new PostFx(this.renderer, this.scene, this.rig.camera)
 
     this.player = new PlayerController(this.collision, this.scene)
     this.player.teleport(this.anchors.playerStart)
@@ -205,6 +211,11 @@ export class Game {
 
     inputContext.onChange(() => this.hud.setContext(inputContext.hudState))
 
+    // Die Einstellungen einmal anwenden, bevor das erste Bild faellt. Ohne das
+    // gilt der Schalter "Hohe Detailstufe" erst, nachdem ihn jemand anfasst -
+    // ein schwaches Geraet liefe bis dahin mit voller Oberflaechenstruktur und
+    // eingeschalteter Bildveredelung.
+    this.applySettings(this.hud.settings)
     this.load()
     this.resize()
     window.addEventListener('resize', () => this.resize())
@@ -245,7 +256,11 @@ export class Game {
       // weil Headless-Chromium wenige Kerne meldet und die Automatik deshalb
       // immer die niedrige Stufe waehlt - sonst pruefte die Abnahme nie das,
       // was ein Spieler am Rechner sieht.
-      setDetail: (high: boolean) => setLookDetail(high),
+      setDetail: (high: boolean) => {
+        setLookDetail(high)
+        this.post.setEnabled(high)
+      },
+      postEnabled: () => this.post.enabled,
       save: () => this.save(true),
       closeOnboarding: () => this.hud.closeOnboarding(),
       talk: () => this.talkToMira(),
@@ -353,7 +368,7 @@ export class Game {
       this.save(false)
     }
 
-    this.renderer.render(this.scene, this.rig.camera)
+    this.post.render(this.scene, this.rig.camera)
     this.input.endFrame()
   }
 
@@ -701,6 +716,10 @@ export class Game {
     this.rig.reducedMotion = settings.reducedMotion
     this.rig.sensitivity = settings.sensitivity
     setLookDetail(settings.highDetail)
+    // Postprocessing kostet zwei Vollbildpaesse und den Blur der Blueten -
+    // auf der niedrigen Stufe bleibt es deshalb aus, wie die Graybox-Regel es
+    // fuer schwache Geraete verlangt.
+    this.post.setEnabled(settings.highDetail)
   }
 
   private refreshWallet(): void {
@@ -831,5 +850,6 @@ export class Game {
     const height = this.container.clientHeight
     this.renderer.setSize(width, height, false)
     this.rig.resize(width, height)
+    this.post.setSize(width, height)
   }
 }
