@@ -1,0 +1,259 @@
+<!doctype html>
+<html>
+  <head><meta charset="utf-8" /><title>Fynnox Rig Bake</title></head>
+  <body>
+    <pre id="log"></pre>
+    <script type="module">
+      import * as THREE from 'three'
+      import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
+      import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js'
+
+      const log = (...a) => {
+        document.getElementById('log').textContent += a.join(' ') + '\n'
+        console.log(a.join(' '))
+      }
+
+      /**
+       * Das HD-Modell hat kein Skelett, das Adventure-Modell eines mit 41
+       * Gelenken. Beide sind dasselbe Tripo-Generat in derselben Ruhepose -
+       * deshalb laesst sich die Gewichtung Punkt fuer Punkt uebertragen, statt
+       * sie aus der Vertexlage zu schaetzen. Geschaetzte Gewichte reissen genau
+       * dort auf, wo es auffaellt: Achsel, Huefte, Saum der Tunika.
+       */
+      const GROUPS = ['hip', 'torso', 'head', 'armL', 'armR', 'legL', 'legR']
+
+      function groupForJoint(name) {
+        if (/^(Root|Hip|Pelvis|Waist)$/.test(name)) return 'hip'
+        if (/^(Spine0[12]|[LR]_Clavicle)$/.test(name)) return 'torso'
+        if (/^(Head|NeckTwist0[12])$/.test(name)) return 'head'
+        if (/^L_(Upperarm|Forearm|Hand)/.test(name)) return 'armSideL'
+        if (/^R_(Upperarm|Forearm|Hand)/.test(name)) return 'armSideR'
+        if (/^L_(Thigh|Calf|Foot|ToeBase)/.test(name)) return 'legSideL'
+        if (/^R_(Thigh|Calf|Foot|ToeBase)/.test(name)) return 'legSideR'
+        return null
+      }
+
+      const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder)
+
+      /** Beide Dateien in denselben Raum bringen: Fuesse auf 0, Hoehe 1. */
+      function normalize(scene) {
+        scene.updateMatrixWorld(true)
+        const box = new THREE.Box3().setFromObject(scene)
+        const size = new THREE.Vector3()
+        box.getSize(size)
+        const wrap = new THREE.Group()
+        wrap.scale.setScalar(1 / size.y)
+        wrap.position.set(0, -box.min.y / size.y, 0)
+        wrap.add(scene)
+        wrap.updateMatrixWorld(true)
+        return wrap
+      }
+
+      function firstMesh(root) {
+        let found = null
+        root.traverse((o) => {
+          if (!found && (o.isMesh || o.isSkinnedMesh)) found = o
+        })
+        return found
+      }
+
+      const rig = normalize((await loader.loadAsync('/models/_tmp_adventure.glb')).scene)
+      const target = normalize((await loader.loadAsync('/models/fynnox.glb')).scene)
+      const rigMesh = firstMesh(rig)
+      const targetMesh = firstMesh(target)
+      log('Rig-Vertices:', rigMesh.geometry.attributes.position.count)
+      log('Ziel-Vertices:', targetMesh.geometry.attributes.position.count)
+
+      // Gelenkpositionen der Ruhepose.
+      const jointWorld = new Map()
+      for (const bone of rigMesh.skeleton.bones) {
+        jointWorld.set(bone.name, new THREE.Vector3().setFromMatrixPosition(bone.matrixWorld))
+      }
+
+      // Zielraum des Spiels: Blick nach +Z statt +X. Die Drehung wird hier
+      // eingebacken, damit im Spielcode keine dritte Achsenkonvention auftaucht.
+      const toGame = new THREE.Matrix4().makeRotationY(-Math.PI / 2)
+
+      // Seitenzuordnung aus der Geometrie ableiten, nicht aus dem Gelenknamen:
+      // die Spielgruppen armL/armR liegen bei -X/+X, so ist die Figur gebaut.
+      const armLeftIsL = jointWorld.get('L_Upperarm').clone().applyMatrix4(toGame).x < 0
+      const legLeftIsL = jointWorld.get('L_Thigh').clone().applyMatrix4(toGame).x < 0
+      log('L_Upperarm ->', armLeftIsL ? 'armL' : 'armR', '| L_Thigh ->', legLeftIsL ? 'legL' : 'legR')
+
+      function resolveGroup(name) {
+        const g = groupForJoint(name)
+        if (g === 'armSideL') return armLeftIsL ? 'armL' : 'armR'
+        if (g === 'armSideR') return armLeftIsL ? 'armR' : 'armL'
+        if (g === 'legSideL') return legLeftIsL ? 'legL' : 'legR'
+        if (g === 'legSideR') return legLeftIsL ? 'legR' : 'legL'
+        return g
+      }
+
+      const unmapped = rigMesh.skeleton.bones
+        .filter((b) => resolveGroup(b.name) === null)
+        .map((b) => b.name)
+      if (unmapped.length) log('!! ohne Gruppe:', unmapped.join(', '))
+      const jointGroup = rigMesh.skeleton.bones.map((b) => GROUPS.indexOf(resolveGroup(b.name)))
+
+      const PIVOT_JOINT = {
+        hip: 'Pelvis',
+        torso: 'Spine01',
+        head: 'Head',
+        [armLeftIsL ? 'armL' : 'armR']: 'L_Upperarm',
+        [armLeftIsL ? 'armR' : 'armL']: 'R_Upperarm',
+        [legLeftIsL ? 'legL' : 'legR']: 'L_Thigh',
+        [legLeftIsL ? 'legR' : 'legL']: 'R_Thigh',
+      }
+      const bones = {}
+      for (const g of GROUPS) {
+        bones[g] = jointWorld
+          .get(PIVOT_JOINT[g])
+          .clone()
+          .applyMatrix4(toGame)
+          .toArray()
+          .map((n) => Math.round(n * 1e5) / 1e5)
+      }
+      log('Knochen (Einheitsraum, Blick +Z):', JSON.stringify(bones))
+
+      // Punktwolke des Rigs in ein gleichmaessiges Gitter einsortieren.
+      const rigPos = rigMesh.geometry.attributes.position
+      const rigSkinIndex = rigMesh.geometry.attributes.skinIndex
+      const rigSkinWeight = rigMesh.geometry.attributes.skinWeight
+      const CELL = 0.02
+      const grid = new Map()
+      const rigPoints = new Float32Array(rigPos.count * 3)
+      const v = new THREE.Vector3()
+      for (let i = 0; i < rigPos.count; i++) {
+        // Nicht die rohe Vertexlage nehmen: das Adventure-Modell ist quantisiert
+        // (KHR_mesh_quantization), seine Attribute stehen in einem +-1-Raum und
+        // erst die Bindematrix des Skeletts holt sie in die Figurengroesse.
+        // Ungerechnet liegt die Punktwolke doppelt so gross und um die Mitte
+        // gespiegelt - die Zuordnung traf dann irgendwohin.
+        rigMesh.getVertexPosition(i, v).applyMatrix4(rigMesh.matrixWorld)
+        rigPoints[i * 3] = v.x
+        rigPoints[i * 3 + 1] = v.y
+        rigPoints[i * 3 + 2] = v.z
+        const k = `${Math.floor(v.x / CELL)},${Math.floor(v.y / CELL)},${Math.floor(v.z / CELL)}`
+        const bucket = grid.get(k)
+        if (bucket) bucket.push(i)
+        else grid.set(k, [i])
+      }
+      log('Gitterzellen:', grid.size)
+      {
+        const a = new THREE.Box3(), b = new THREE.Box3()
+        for (let i = 0; i < rigPos.count; i++) a.expandByPoint(new THREE.Vector3(rigPoints[i*3], rigPoints[i*3+1], rigPoints[i*3+2]))
+        const tp = targetMesh.geometry.attributes.position
+        for (let i = 0; i < tp.count; i++) b.expandByPoint(new THREE.Vector3().fromBufferAttribute(tp, i).applyMatrix4(targetMesh.matrixWorld))
+        log('Rig-Box   ', a.min.toArray().map(n=>n.toFixed(3)).join(' '), '..', a.max.toArray().map(n=>n.toFixed(3)).join(' '))
+        log('Ziel-Box  ', b.min.toArray().map(n=>n.toFixed(3)).join(' '), '..', b.max.toArray().map(n=>n.toFixed(3)).join(' '))
+      }
+
+      const tPos = targetMesh.geometry.attributes.position
+      const count = tPos.count
+      const outIndex = new Uint8Array(count * 4)
+      const outWeight = new Uint8Array(count * 4)
+      const acc = new Float32Array(GROUPS.length)
+      const dists = new Float32Array(count)
+      let maxDist = 0
+
+      for (let i = 0; i < count; i++) {
+        v.fromBufferAttribute(tPos, i).applyMatrix4(targetMesh.matrixWorld)
+        const cx = Math.floor(v.x / CELL)
+        const cy = Math.floor(v.y / CELL)
+        const cz = Math.floor(v.z / CELL)
+        let best = -1
+        let bestD = Infinity
+        let foundRing = -1
+        for (let r = 0; r <= 24; r++) {
+          for (let x = cx - r; x <= cx + r; x++) {
+            for (let y = cy - r; y <= cy + r; y++) {
+              for (let z = cz - r; z <= cz + r; z++) {
+                // Nur die Schale des Rings, das Innere war schon dran.
+                if (
+                  r > 0 &&
+                  Math.abs(x - cx) !== r &&
+                  Math.abs(y - cy) !== r &&
+                  Math.abs(z - cz) !== r
+                )
+                  continue
+                const bucket = grid.get(`${x},${y},${z}`)
+                if (!bucket) continue
+                for (const j of bucket) {
+                  const dx = rigPoints[j * 3] - v.x
+                  const dy = rigPoints[j * 3 + 1] - v.y
+                  const dz = rigPoints[j * 3 + 2] - v.z
+                  const d = dx * dx + dy * dy + dz * dz
+                  if (d < bestD) {
+                    bestD = d
+                    best = j
+                  }
+                }
+              }
+            }
+          }
+          // Ein Ring mehr als noetig: der erste Treffer kann in der Ecke der
+          // Schale liegen und ein naeherer Punkt im naechsten Ring stehen.
+          if (best >= 0 && foundRing < 0) foundRing = r
+          if (foundRing >= 0 && r >= foundRing + 1) break
+        }
+        if (best < 0) throw new Error('kein Nachbar fuer Vertex ' + i)
+        dists[i] = Math.sqrt(bestD)
+        maxDist = Math.max(maxDist, dists[i])
+
+        acc.fill(0)
+        for (let c = 0; c < 4; c++) {
+          const w = rigSkinWeight.getComponent(best, c)
+          if (w <= 0) continue
+          const g = jointGroup[rigSkinIndex.getComponent(best, c)]
+          if (g >= 0) acc[g] += w
+        }
+        const order = [...acc.keys()].sort((a, b) => acc[b] - acc[a]).slice(0, 4)
+        let sum = 0
+        for (const g of order) sum += acc[g]
+        if (sum <= 0) {
+          outIndex[i * 4] = 0
+          outWeight[i * 4] = 255
+          continue
+        }
+        let rest = 255
+        for (let c = 0; c < 4; c++) {
+          const g = order[c]
+          const w = c === 3 ? rest : Math.min(rest, Math.round((acc[g] / sum) * 255))
+          outIndex[i * 4 + c] = g
+          outWeight[i * 4 + c] = w
+          rest -= w
+        }
+      }
+      const sorted = [...dists].sort((a, b) => a - b)
+      const q = (f) => sorted[Math.floor(f * (sorted.length - 1))].toFixed(4)
+      log('Zuordnungsabstand: median', q(0.5), 'p95', q(0.95), 'p99', q(0.99), 'max', maxDist.toFixed(4))
+      const worst = dists.indexOf(maxDist)
+      const wv = new THREE.Vector3().fromBufferAttribute(tPos, worst).applyMatrix4(targetMesh.matrixWorld)
+      log('entferntester Punkt bei', wv.toArray().map((n) => n.toFixed(3)).join(' / '))
+
+      const header = JSON.stringify({
+        format: 'FYNXRIG1',
+        source: 'fynnox_hd.glb, Skelett und Gewichte aus fynnox.glb (Adventure)',
+        note: 'Einheitsraum: Fuesse auf y=0, Hoehe 1, Blick nach +Z.',
+        vertexCount: count,
+        groups: GROUPS,
+        bones,
+      })
+      // Mit Leerzeichen auf vier Byte auffuellen, nicht mit Nullbytes: der
+      // Kopf wird beim Laden als Text gelesen, und JSON.parse verweigert ein
+      // angehaengtes Nullbyte.
+      const pad = (4 - (header.length % 4)) % 4
+      const headerBytes = new TextEncoder().encode(header + ' '.repeat(pad))
+      const out = new Uint8Array(12 + headerBytes.length + count * 8)
+      out.set(new TextEncoder().encode('FYNXRIG1'), 0)
+      new DataView(out.buffer).setUint32(8, headerBytes.length, true)
+      out.set(headerBytes, 12)
+      out.set(outIndex, 12 + headerBytes.length)
+      out.set(outWeight, 12 + headerBytes.length + count * 4)
+
+      window.__bake = { bytes: [...out], bones, vertexCount: count }
+      window.__done = true
+      log('fertig,', out.length, 'Byte')
+    </script>
+  </body>
+</html>
