@@ -100,6 +100,12 @@ export class CollisionWorld {
     let nearest = maxDistance
     for (const collider of this.query(sweep)) {
       if (collider.tag === 'nocam') continue
+      // Ein Koerper, in dem der Blickpunkt schon steckt, verdeckt nichts - er
+      // kann die Kamera also auch nicht heranziehen. Three liefert bei einem
+      // Ursprung innerhalb der Box den AUSTRITTSpunkt; ohne diese Zeile zieht
+      // deshalb der Rumpf des eigenen Fahrzeugs die Verfolgerkamera an sich
+      // heran, sobald der Sitz hoch genug in der Kollisionsbox liegt.
+      if (collider.box.containsPoint(origin)) continue
       if (ray.intersectBox(collider.box, hitPoint)) {
         nearest = Math.min(nearest, origin.distanceTo(hitPoint))
       }

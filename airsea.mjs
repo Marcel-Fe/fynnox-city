@@ -164,7 +164,9 @@ check('horizon_damping des Profils ist aktiv', inSub.cameraHorizonDamped === tru
 await page.screenshot({ path: `${OUT}/a4-scout-cockpit.png` })
 
 // --- 9. Dritte Achse: Tauchfahrt, Kamera laeuft gedaempft nach ------------
-await frames(12)
+// Erst den Kamerablend des Einstiegs auslaufen lassen, damit der
+// Ausgangsabstand ein Ruhewert ist und kein Zwischenstand.
+await frames(30)
 const beforeDive = await state()
 const lagBefore = beforeDive.cameraPosition[1] - beforeDive.scout[1]
 await press('descend')
