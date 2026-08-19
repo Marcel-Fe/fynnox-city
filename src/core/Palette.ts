@@ -289,6 +289,67 @@ function injectOnce(source: string, anchor: string, replacement: string): string
   return source.replace(anchor, replacement)
 }
 
+/**
+ * Haengt den Look-Patch in ein Material.
+ *
+ * Herausgezogen, weil der Patch nicht nur die Weltfarben tragen muss: die
+ * geladene Fynnox-Figur bringt eine Textur mit und braucht denselben Shader,
+ * sonst steht sie wie ausgeschnitten in der Stadt. Der Patch wird dafuer
+ * angewendet, nicht kopiert - eine zweite Fassung wuerde beim naechsten
+ * Look-Eingriff auseinanderlaufen.
+ *
+ * Er setzt hinter `map_fragment` an, arbeitet also auf der bereits texturierten
+ * Grundfarbe. Eine Textur wird dadurch abgestuft und ueberstrahlt, nicht ersetzt.
+ */
+export function applyLookPatch(material: THREE.Material): void {
+  material.onBeforeCompile = (shader) => {
+    for (const [name, uniform] of Object.entries(lookUniforms)) {
+      shader.uniforms[name] = uniform as THREE.IUniform
+    }
+    // Objektraum-Position als Varying. Sie kommt aus `transformed`, also vor
+    // der Modellmatrix - nur so klebt das Muster am bewegten Objekt, statt
+    // beim Fahren durch den Rumpf zu wandern.
+    shader.vertexShader = injectOnce(
+      injectOnce(
+        shader.vertexShader,
+        'void main() {',
+        'varying vec3 vFynnoxSurface;\nvoid main() {',
+      ),
+      '#include <begin_vertex>',
+      '#include <begin_vertex>\n\tvFynnoxSurface = transformed;',
+    )
+    shader.fragmentShader = injectOnce(
+      injectOnce(
+        injectOnce(
+          shader.fragmentShader,
+          'void main() {',
+          `varying vec3 vFynnoxSurface;
+uniform vec3 uRimColor;
+uniform float uRimStrength;
+uniform float uToonMix;
+uniform float uMottle;
+uniform float uGrain;
+uniform vec3 uShadowTint;
+uniform vec3 uLightTint;
+uniform float uTintStrength;
+${NOISE_CHUNK}
+${TOON_CHUNK}
+void main() {`,
+        ),
+        '#include <map_fragment>',
+        `#include <map_fragment>\n${SURFACE_CHUNK}`,
+      ),
+      '#include <opaque_fragment>',
+      `${TOON_OUTPUT}\n#include <opaque_fragment>`,
+    )
+  }
+  // Alle Materialien teilen denselben Patch, also auch dasselbe Programm -
+  // sonst kompilierte Three fuer jede Farbe einen eigenen Shader. Three haengt
+  // Materialtyp und Texturbelegung von sich aus an den Schluessel an, die
+  // texturierte Figur bekommt deshalb trotzdem ihr eigenes Programm.
+  material.customProgramCacheKey = () => 'fynnox-toon-rim'
+}
+
 const cache = new Map<string, THREE.MeshLambertMaterial>()
 
 /** Lambert als Basis - mobil guenstig - mit aufgesetzter Toon-Stufung und Streiflicht. */
@@ -302,51 +363,29 @@ export function mat(key: MaterialKey | string, options?: { transparent?: number 
       transparent: (options?.transparent ?? 1) < 1,
       opacity: options?.transparent ?? 1,
     })
-    material.onBeforeCompile = (shader) => {
-      for (const [name, uniform] of Object.entries(lookUniforms)) {
-        shader.uniforms[name] = uniform as THREE.IUniform
-      }
-      // Objektraum-Position als Varying. Sie kommt aus `transformed`, also vor
-      // der Modellmatrix - nur so klebt das Muster am bewegten Objekt, statt
-      // beim Fahren durch den Rumpf zu wandern.
-      shader.vertexShader = injectOnce(
-        injectOnce(
-          shader.vertexShader,
-          'void main() {',
-          'varying vec3 vFynnoxSurface;\nvoid main() {',
-        ),
-        '#include <begin_vertex>',
-        '#include <begin_vertex>\n\tvFynnoxSurface = transformed;',
-      )
-      shader.fragmentShader = injectOnce(
-        injectOnce(
-          injectOnce(
-            shader.fragmentShader,
-            'void main() {',
-            `varying vec3 vFynnoxSurface;
-uniform vec3 uRimColor;
-uniform float uRimStrength;
-uniform float uToonMix;
-uniform float uMottle;
-uniform float uGrain;
-uniform vec3 uShadowTint;
-uniform vec3 uLightTint;
-uniform float uTintStrength;
-${NOISE_CHUNK}
-${TOON_CHUNK}
-void main() {`,
-          ),
-          '#include <map_fragment>',
-          `#include <map_fragment>\n${SURFACE_CHUNK}`,
-        ),
-        '#include <opaque_fragment>',
-        `${TOON_OUTPUT}\n#include <opaque_fragment>`,
-      )
-    }
-    // Alle Materialien teilen denselben Patch, also auch dasselbe Programm -
-    // sonst kompilierte Three fuer jede Farbe einen eigenen Shader.
-    material.customProgramCacheKey = () => 'fynnox-toon-rim'
+    applyLookPatch(material)
     cache.set(id, material)
   }
+  return material
+}
+
+/**
+ * Material fuer eine texturierte Figur im Stadtlook.
+ *
+ * Das geladene GLB bringt ein `MeshStandardMaterial` mit Metall- und
+ * Rauheitskarte mit. Beides bleibt hier liegen: die Stadt wird durchgehend mit
+ * Lambert beleuchtet, und eine PBR-Figur mitten darin haette ein anderes
+ * Lichtverhalten als jedes Objekt um sie herum - genau der Stilbruch, der
+ * vermieden werden soll. Uebernommen werden Grundfarbe und Normalenkarte, also
+ * das, was die Figur ausmacht.
+ */
+export function characterMaterial(source: THREE.MeshStandardMaterial): THREE.MeshLambertMaterial {
+  const material = new THREE.MeshLambertMaterial({
+    map: source.map,
+    normalMap: source.normalMap,
+    color: source.color,
+  })
+  if (source.normalScale) material.normalScale.copy(source.normalScale)
+  applyLookPatch(material)
   return material
 }
