@@ -11,6 +11,12 @@ function check(name, ok, detail = '') {
   console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? ' :: ' + detail : ''}`)
 }
 
+/**
+ * Der Start wartet seit dem geladenen Fynnox-Modell auf ein Asset, und der
+ * Softwarerenderer im Headless-Betrieb braucht fuer den Weltaufbau ohnehin
+ * rund neun Sekunden. Sobald eine zweite Seite parallel rendert - die
+ * Mobilansicht weiter unten - reichten die alten 30 s nicht mehr zuverlaessig.
+ */
 const browser = await chromium.launch()
 const page = await browser.newPage({ viewport: { width: 1280, height: 780 } })
 const errors = []
@@ -20,7 +26,7 @@ page.on('console', (m) => {
 page.on('pageerror', (e) => errors.push(String(e)))
 
 await page.goto(URL, { waitUntil: 'networkidle' })
-await page.waitForFunction(() => window.fynnoxQa !== undefined, { timeout: 30000 })
+await page.waitForFunction(() => window.fynnoxQa !== undefined, { timeout: 90000 })
 
 const state = () => page.evaluate(() => window.fynnoxQa.state())
 const wait = (ms) => page.waitForTimeout(ms)
@@ -265,7 +271,7 @@ const before = await state()
 await page.evaluate(() => window.fynnoxQa.save())
 await wait(500)
 await page.reload({ waitUntil: 'networkidle' })
-await page.waitForFunction(() => window.fynnoxQa !== undefined, { timeout: 30000 })
+await page.waitForFunction(() => window.fynnoxQa !== undefined, { timeout: 90000 })
 await wait(1500)
 const after = await state()
 check('Raetselzustand ueberlebt Neuladen', after.puzzleSolved === before.puzzleSolved)
@@ -291,7 +297,7 @@ const mobile = await browser.newPage({
   deviceScaleFactor: 3,
 })
 await mobile.goto(URL, { waitUntil: 'networkidle' })
-await mobile.waitForFunction(() => window.fynnoxQa !== undefined, { timeout: 30000 })
+await mobile.waitForFunction(() => window.fynnoxQa !== undefined, { timeout: 90000 })
 await mobile.waitForTimeout(1500)
 await mobile.evaluate(() => window.fynnoxQa.closeOnboarding())
 await mobile.waitForTimeout(900)

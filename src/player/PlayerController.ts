@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import { CollisionWorld, moveAndSlide } from '../core/CollisionWorld'
-import { FynnoxModel } from './FynnoxModel'
+import type { PlayerFigure } from './FynnoxPose'
 import type { OrbitCameraRig } from '../camera/OrbitCameraRig'
 import type { InputManager } from '../input/InputManager'
 
@@ -15,7 +15,6 @@ const MANTLE_SECONDS = 0.42
 const FALLBACK_SPAWN = new THREE.Vector3(-26, 0.4, -16)
 
 export class PlayerController {
-  readonly model = new FynnoxModel()
   readonly position = new THREE.Vector3()
   readonly velocity = new THREE.Vector3()
   heading = 0
@@ -37,9 +36,15 @@ export class PlayerController {
   private readonly wish = new THREE.Vector3()
   private readonly probe = new THREE.Box3()
 
+  /**
+   * Die Figur wird hereingereicht, nicht hier gebaut: welche steht - die
+   * geladene oder die prozedurale - entscheidet der Ladepfad vor dem ersten
+   * Bild. Bewegung, Kollision und Zustandswahl kennen den Unterschied nicht.
+   */
   constructor(
     private readonly collision: CollisionWorld,
     scene: THREE.Scene,
+    readonly model: PlayerFigure,
   ) {
     scene.add(this.model.root)
   }

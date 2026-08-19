@@ -8,7 +8,7 @@ Live: https://marcel-fe.github.io/fynnox-city/
 
 Das Produktionspaket selbst liegt **außerhalb** des Repos unter
 `../Fynnox_City_3D_Produktionspaket_v1/` (386 MB Referenzbilder, Doku, Prompts).
-Im Repo stehen nur die vier Manifeste (`src/contracts/`) und die ~0,7 MB Laufzeit-Assets.
+Im Repo stehen nur die vier Manifeste (`src/contracts/`) und die ~1,1 MB Laufzeit-Assets.
 
 ## Verbindliche Verträge
 
@@ -61,6 +61,13 @@ src/save/        SaveGame (atomar, localStorage)
 
 Statische Geometrie wird in `WorldBuilder.finish()` pro Material zu einem Mesh
 verschmolzen – neue Weltteile bitte über `WorldBuilder`, nicht als Einzelmeshes.
+
+Genau **ein** asynchroner Schritt läuft vor dem ersten Bild: `loadFynnoxFigure()`
+lädt die Spielfigur aus `public/models/`. Der Ladepfad wirft nie – schlägt er
+fehl, steht die prozedurale `FynnoxModel` statt eines schwarzen Bildschirms.
+Beide Figuren bewegen sich über dieselben Posen in `FynnoxPose.applyPose()`.
+Die Skelettbindung des GLB liegt vorgerechnet in `public/models/fynnox_rig.bin`
+und entsteht mit `node tools/bake-rig.mjs`.
 
 ## Arbeitsweise
 

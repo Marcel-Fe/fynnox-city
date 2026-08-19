@@ -7,6 +7,7 @@ import { Water } from '../world/Water'
 import { SkySystem } from '../world/Sky'
 import { AmbientMotion } from '../world/AmbientMotion'
 import { PlayerController } from '../player/PlayerController'
+import type { FigureLoad } from '../player/loadFynnox'
 import { OrbitCameraRig } from '../camera/OrbitCameraRig'
 import { InputManager } from '../input/InputManager'
 import { CitySpark } from '../vehicle/CitySpark'
@@ -83,7 +84,10 @@ export class Game {
   private autosaveTimer = 0
   private frameCount = 0
 
-  constructor(private readonly container: HTMLElement) {
+  constructor(
+    private readonly container: HTMLElement,
+    private readonly figure: FigureLoad,
+  ) {
     this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' })
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
     this.renderer.shadowMap.enabled = true
@@ -109,7 +113,7 @@ export class Game {
     // nach dem Weltaufbau fest.
     this.post = new PostFx(this.renderer, this.scene, this.rig.camera)
 
-    this.player = new PlayerController(this.collision, this.scene)
+    this.player = new PlayerController(this.collision, this.scene, figure.figure)
     this.player.teleport(this.anchors.playerStart)
     this.player.onRescued = () => this.hud.toast('Aus dem Hafenbecken geholt - nichts verloren.')
 
@@ -317,6 +321,10 @@ export class Game {
         scanner: this.scannerActive,
         prompt: this.lastPrompt,
         frames: this.frameCount,
+        // Belegt im Abnahmelauf, dass wirklich das geladene Modell steht und
+        // nicht stillschweigend der Rueckfall.
+        figure: this.figure.source,
+        figureProblem: this.figure.problem,
         mantling: this.player.isMantling,
         controlEnabled: this.player.controlEnabled,
       }),

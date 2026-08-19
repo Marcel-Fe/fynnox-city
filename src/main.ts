@@ -1,6 +1,7 @@
 import './ui/styles.css'
 import { validateManifests, manifestSummary } from './contracts/manifests'
 import { Game } from './core/Game'
+import { loadFynnoxFigure } from './player/loadFynnox'
 
 const app = document.getElementById('app') as HTMLElement
 
@@ -23,7 +24,12 @@ try {
       `${manifestSummary.animationStates} Animationszustaende, ` +
       `${manifestSummary.worldZones} Weltzonen, ${manifestSummary.vehicles} Fahrzeugvertraege.`,
   )
-  const game = new Game(app)
+  // Einziger asynchroner Schritt vor dem ersten Bild: die Spielfigur. Sie wird
+  // abgewartet, damit die Stadt nicht ohne Fynnox aufgeht - der Ladepfad haelt
+  // dafuer selbst einen Rueckfall bereit und wirft nicht.
+  loader.textContent = 'Fynnox wird geladen ...'
+  const figure = await loadFynnoxFigure()
+  const game = new Game(app, figure)
   game.start()
   loader.remove()
 } catch (error) {
