@@ -22,6 +22,18 @@ const NEAR_RING = 26
 const MID_RING = 62
 
 /**
+ * Hoehe des Hueftgelenks ueber dem Wurzelpunkt der Figur.
+ *
+ * Die Wurzel liegt auf Fusshoehe - im Stehen ist sie damit die Bodenhoehe. Im
+ * Sitzen ist sie das gerade nicht: dort liegt die Sitzflaeche unter der HUEFTE,
+ * nicht unter den Fuessen. Wer die Wurzel auf die Sitzhoehe setzt, hebt die
+ * ganze Figur um diese Huefthoehe an; bei 0,75 m sitzt sie dann auf der Lehne.
+ */
+const HIP_Y = 0.75
+/** Oberschenkel liegt auf, nicht in der Sitzflaeche. */
+const THIGH_RADIUS = 0.062
+
+/**
  * Aussehen einer Ambient-Figur. Alle laufen durch dieselbe Bauroutine; was sie
  * unterscheidet, sind Farben und drei Formmerkmale. Mira, Boro und Tavi stammen
  * aus 03_Bildreferenzen/12_Charakter_Turnarounds und sind benannte Figuren des
@@ -170,7 +182,7 @@ export class AmbientNPCSystem {
     const legs: THREE.Group[] = []
     for (const dx of [-0.11, 0.11]) {
       const leg = new THREE.Group()
-      leg.position.set(dx, 0.75, 0)
+      leg.position.set(dx, HIP_Y, 0)
       this.buildLeg(leg, look)
       root.add(leg)
       legs.push(leg)
@@ -342,9 +354,15 @@ export class AmbientNPCSystem {
         break
       }
       case 'npc_sit_bench': {
-        npc.legs[0].rotation.x = -1.5
-        npc.legs[1].rotation.x = -1.5
-        npc.root.position.y = (npc.seat?.y ?? 0) + 0.05
+        // Das Bein ist ein starres Teil ohne Knie. Waagerecht nach vorn gedreht
+        // sieht das aus wie ein umgekippter Stuhl. Die Gerade von der Huefte zum
+        // Fuss einer sitzenden Figur laeuft 0,4 m nach vorn und 0,45 m nach
+        // unten - also 43 Grad aus der Senkrechten. Genau die trifft dieses eine
+        // Teil, und die Fuesse landen dabei auf dem Gehweg statt in der Luft.
+        npc.legs[0].rotation.x = -0.75
+        npc.legs[1].rotation.x = -0.75
+        // Der Anker beschreibt die Sitzflaeche, und darauf gehoert die Huefte.
+        npc.root.position.y = (npc.seat?.y ?? 0) + THIGH_RADIUS - HIP_Y
         npc.arms[0].rotation.x = Math.sin(npc.phase * 1.3) * 0.1
         break
       }

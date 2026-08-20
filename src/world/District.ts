@@ -18,6 +18,12 @@ export const FLOOR_HEIGHT = 3.2
 export const SHOP_FLOOR_HEIGHT = 4.0
 export const FACADE_MODULE = 2.5
 export const CURB_HEIGHT = 0.15
+/**
+ * Oberkante der Sitzflaeche einer Bank: Gehweg plus 0,45 m Blockhoehe.
+ * Als Konstante, weil sie an zwei Stellen gebraucht wird - beim Bauen der Bank
+ * und beim Setzen der Sitzanker. Auseinandergelaufen sassen die Figuren daneben.
+ */
+export const BENCH_SEAT_Y = CURB_HEIGHT + 0.45
 
 export interface DistrictAnchors {
   playerStart: THREE.Vector3
@@ -199,11 +205,15 @@ export function buildDistrict(scene: THREE.Scene, collision: CollisionWorld): Di
     motion: { canopies, windsock },
     // Mitte des Hafenbeckens vor der Kaimauer - hier kreisen die Moewen.
     basin: new THREE.Vector3(4, 0, 52),
+    // Hoehe der SITZFLAECHE, nicht der Bank: der Block steht mit Unterkante auf
+    // dem Gehweg (0,15 m) und ist 0,45 m hoch. Die 0,45 allein waren die
+    // Bauteilhoehe - wer sie als Sitzhoehe liest, setzt die Figur 15 cm zu tief
+    // an und, weil unten die Huefthoehe fehlte, am Ende auf die Lehne.
     npcSeats: [
-      new THREE.Vector3(-8, 0.45, 27.5),
-      new THREE.Vector3(-4, 0.45, 27.5),
-      new THREE.Vector3(14, 0.45, 10),
-      new THREE.Vector3(garage.x + 6, 0.45, -16.2),
+      new THREE.Vector3(-8, BENCH_SEAT_Y, 27.5),
+      new THREE.Vector3(-4, BENCH_SEAT_Y, 27.5),
+      new THREE.Vector3(14, BENCH_SEAT_Y, 10),
+      new THREE.Vector3(garage.x + 6, BENCH_SEAT_Y, -16.2),
     ],
   }
 }
@@ -1920,15 +1930,24 @@ function buildStreetDressing(b: WorldBuilder, sway: { scene: THREE.Scene; out: T
 }
 
 function buildProps(b: WorldBuilder): void {
-  // Baenke auf Promenade und Platz (Sitzhoehe 0,45 m).
+  // Baenke auf Promenade und Platz: Sitzblock 0,45 m hoch auf dem Gehweg.
   for (const [x, z] of [
     [-8, 27.5],
     [-4, 27.5],
     [14, 10],
     [-24, -16.2],
   ]) {
-    b.box({ x, y: 0.15, z, w: 1.8, h: 0.45, d: 0.6, color: COLORS.wood })
-    b.box({ x, y: 0.6, z: z - 0.25, w: 1.8, h: 0.5, d: 0.12, color: COLORS.wood, collide: false })
+    b.box({ x, y: CURB_HEIGHT, z, w: 1.8, h: 0.45, d: 0.6, color: COLORS.wood })
+    b.box({
+      x,
+      y: BENCH_SEAT_Y,
+      z: z - 0.25,
+      w: 1.8,
+      h: 0.5,
+      d: 0.12,
+      color: COLORS.wood,
+      collide: false,
+    })
   }
   // Baeume auf Platz und Terrasse. Die drei Kisten pro Kuebel waren dieselbe
   // Graybox wie beim Strassenbaum - hier steht jetzt derselbe Baukasten.
