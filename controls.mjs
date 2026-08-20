@@ -191,6 +191,28 @@ check('Windsack folgt derselben Windrichtung wie die Kronen',
   Math.abs(motionB.windsock[0] - motionB.wind[0]) < 0.2,
   `sack=${motionB.windsock[0].toFixed(2)} wind=${motionB.wind[0].toFixed(2)}`)
 
+// --- 6. Maus dreht die Sicht, ohne dass man eine Taste haelt --------------
+// Gemeldet wurde "die Sicht dreht sich nicht mit, ich sehe nicht wo ich
+// hinlaufe". Ursache war, dass die Kamera am Rechner nur beim Ziehen mit
+// gedrueckter Taste folgte. Diese Pruefungen kommen zuletzt, weil sie den
+// Blickwinkel absichtlich verstellen. Touch bleibt unberuehrt - dort dreht das
+// Wischen auf der rechten Bildhaelfte, und das lief schon vorher.
+check('Ohne Klick ist die Maus frei',
+  await page.evaluate(() => document.pointerLockElement === null))
+await page.mouse.click(550, 400)
+await wait(400)
+check('Klick ins Bild faengt die Maus',
+  await page.evaluate(() => document.pointerLockElement !== null))
+const yawBefore = (await state()).cameraYaw
+for (let i = 0; i < 6; i++) {
+  await page.mouse.move(550 + i * 30, 400)
+  await wait(30)
+}
+await frames(6)
+const yawAfter = (await state()).cameraYaw
+check('Maus dreht die Sicht ohne gedrueckte Taste', Math.abs(yawAfter - yawBefore) > 0.1,
+  `Yaw ${yawBefore.toFixed(2)} -> ${yawAfter.toFixed(2)}`)
+
 check('Keine Konsolenfehler', errors.length === 0, errors.slice(0, 3).join(' | '))
 await browser.close()
 

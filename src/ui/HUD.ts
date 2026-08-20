@@ -48,7 +48,7 @@ interface HudCallbacks {
 }
 
 const ONBOARDING_SCREENS = [
-  { file: '01_Bewegung_Touch.svg', title: 'Bewegen und Kamera', text: 'Links ziehen bewegt Fynnox, rechts ziehen dreht die Kamera frei um ihn herum. Tastatur: WASD, Maus ziehen, Leertaste springt.' },
+  { file: '01_Bewegung_Touch.svg', title: 'Bewegen und Kamera', text: 'Links ziehen bewegt Fynnox, rechts ziehen dreht die Kamera frei um ihn herum. Am Rechner: WASD laeuft, Leertaste springt - und ein Klick ins Bild fasst die Maus, dann dreht sie die Sicht ohne Halten mit. Escape gibt sie wieder frei.' },
   { file: '02_Sammeln_Einloesen.svg', title: 'Sammeln und Einloesen', text: 'Stadtfunken einsammeln, an der Projektstation einloesen und die Hafenterrasse sichtbar wachsen sehen. Nichts geht dabei verloren.' },
   { file: '03_Fahrzeuge.svg', title: 'Fahrzeuge', text: 'Am City Spark, am Bluefin, am Skyfin und am Scout erscheint der Einsteigen-Knopf. Im Flugzeug und im U-Boot kommen Steigen und Sinken dazu (Tastatur R und C). Der Ausstieg sucht automatisch einen freien Platz - ist keiner frei, bleibt Fynnox sitzen.' },
   { file: '04_Rivalen_Hinweis.svg', title: 'Fair bleiben', text: 'Keine Waffen, kein Rammen, kein Verlust von Taler oder Fundstuecken. Scheitern kostet nur Zeit.' },

@@ -29,10 +29,15 @@ export class InputManager {
   private stickPointerId: number | null = null
   private readonly stickOrigin = new THREE.Vector2()
   private gamepadIndex: number | null = null
+  /** Maus eingefangen - dann dreht jede Mausbewegung die Kamera. */
+  private locked = false
   /** Zeigt der HUD-Schicht, welche Eingabeart zuletzt benutzt wurde. */
   lastSource: 'touch' | 'keyboard' | 'gamepad' = 'keyboard'
 
-  constructor(surface: HTMLElement) {
+  constructor(private readonly surface: HTMLElement) {
+    document.addEventListener('pointerlockchange', () => {
+      this.locked = document.pointerLockElement === this.surface
+    })
     window.addEventListener('keydown', this.onKeyDown)
     window.addEventListener('keyup', this.onKeyUp)
     surface.addEventListener('pointerdown', this.onPointerDown)
@@ -170,7 +175,28 @@ export class InputManager {
     }
     this.lookPointerId = event.pointerId
     this.lookLast.set(event.clientX, event.clientY)
-    if (event.pointerType !== 'touch') this.lastSource = 'keyboard'
+    if (event.pointerType !== 'touch') {
+      this.lastSource = 'keyboard'
+      this.captureMouse()
+    }
+  }
+
+  /**
+   * Mauszeiger einfangen.
+   *
+   * Ohne das dreht sich die Kamera am Rechner nur, solange jemand die Maustaste
+   * gedrueckt haelt und zieht. Wer mit WASD um eine Ecke laeuft, sieht deshalb
+   * nicht, wo er hinlaeuft - genau die Meldung "die Sicht dreht sich nicht mit".
+   * Touch bleibt aussen vor: dort dreht das Wischen auf der rechten Bildhaelfte,
+   * und das funktioniert. Escape gibt den Zeiger wieder frei und oeffnet
+   * zugleich das Pausemenue.
+   */
+  private captureMouse(): void {
+    if (this.locked || !this.surface.requestPointerLock) return
+    // Der Aufruf liefert in neueren Browsern ein Promise und lehnt ab, wenn das
+    // Dokument den Fokus verloren hat. Unbehandelt waere das ein Konsolenfehler.
+    const request = this.surface.requestPointerLock() as unknown
+    if (request instanceof Promise) request.catch(() => undefined)
   }
 
   private readonly onPointerMove = (event: PointerEvent): void => {
@@ -179,6 +205,13 @@ export class InputManager {
       const dy = (this.stickOrigin.y - event.clientY) / 60
       this.move.set(THREE.MathUtils.clamp(dx, -1, 1), THREE.MathUtils.clamp(dy, -1, 1))
       if (this.move.length() > 1) this.move.normalize()
+      return
+    }
+    if (this.locked) {
+      // Eingefangen liefert der Zeiger keine sinnvolle Bildschirmlage mehr,
+      // nur noch die Bewegung selbst - und die ohne gedrueckte Taste.
+      this.look.x += event.movementX
+      this.look.y += event.movementY
       return
     }
     if (event.pointerId !== this.lookPointerId) return
