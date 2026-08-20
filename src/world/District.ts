@@ -278,6 +278,66 @@ function buildRoads(b: WorldBuilder): void {
 }
 
 /**
+ * Parkbank: Latten auf zwei gusseisernen Wangen.
+ *
+ * Vorher waren es zwei Quader - ein voller Sitzblock und eine Platte dahinter.
+ * Das las als Kiste mit angelehntem Brett, nicht als Bank: einer Bank fehlt
+ * unten die Masse, sie steht auf Beinen und man sieht zwischen den Latten
+ * hindurch. Genau diese Luecken machen die Silhouette.
+ *
+ * Die Kollisionsbox bleibt der eine Sitzblock in voller Groesse - Latten
+ * einzeln kollidieren zu lassen haette die Figur zwischen ihnen haengen lassen.
+ * Sitzhoehe und Lehnenlage bleiben unveraendert, `AmbientNPCSystem` setzt seine
+ * Figuren darauf.
+ */
+function bench(b: WorldBuilder, x: number, z: number): void {
+  const width = 1.8
+  const seatTop = BENCH_SEAT_Y
+  // Die Kollision kommt als reine Box dazu, ohne Geometrie. Ein sichtbarer
+  // Traeger in voller Groesse haette hinter den Latten gestanden und genau die
+  // Luecken wieder zugemacht, die die Bank erst zur Bank machen.
+  b.collisionAdd(
+    new THREE.Box3(
+      new THREE.Vector3(x - width / 2, CURB_HEIGHT, z - 0.3),
+      new THREE.Vector3(x + width / 2, seatTop, z + 0.3),
+    ),
+  )
+  // Wangen aus Gusseisen, links und rechts leicht eingerueckt.
+  for (const side of [-1, 1]) {
+    const wx = x + side * (width / 2 - 0.12)
+    b.box({ x: wx, y: CURB_HEIGHT, z, w: 0.09, h: seatTop - CURB_HEIGHT, d: 0.62, color: COLORS.iron, collide: false })
+    // Lehnenpfosten, nach hinten geneigt angedeutet ueber zwei Stufen.
+    b.box({ x: wx, y: seatTop, z: z - 0.22, w: 0.08, h: 0.5, d: 0.09, color: COLORS.iron, collide: false })
+  }
+  // Sitzlatten mit Fuge, quer zur Bank.
+  for (let i = 0; i < 4; i++) {
+    b.box({
+      x,
+      y: seatTop - 0.05,
+      z: z - 0.24 + i * 0.15,
+      w: width - 0.04,
+      h: 0.05,
+      d: 0.11,
+      color: COLORS.wood,
+      collide: false,
+    })
+  }
+  // Lehnenlatten, drei Stueck mit Luft dazwischen.
+  for (let i = 0; i < 3; i++) {
+    b.box({
+      x,
+      y: seatTop + 0.08 + i * 0.15,
+      z: z - 0.25,
+      w: width - 0.16,
+      h: 0.11,
+      d: 0.05,
+      color: COLORS.wood,
+      collide: false,
+    })
+  }
+}
+
+/**
  * Steinfugen auf einer Bodenflaeche.
  *
  * Ohne sie liest jede grosse Flaeche als eine einzige leere Platte - genau der
@@ -1953,24 +2013,13 @@ function buildStreetDressing(b: WorldBuilder, sway: { scene: THREE.Scene; out: T
 }
 
 function buildProps(b: WorldBuilder): void {
-  // Baenke auf Promenade und Platz: Sitzblock 0,45 m hoch auf dem Gehweg.
   for (const [x, z] of [
     [-8, 27.5],
     [-4, 27.5],
     [14, 10],
     [-24, -16.2],
   ]) {
-    b.box({ x, y: CURB_HEIGHT, z, w: 1.8, h: 0.45, d: 0.6, color: COLORS.wood })
-    b.box({
-      x,
-      y: BENCH_SEAT_Y,
-      z: z - 0.25,
-      w: 1.8,
-      h: 0.5,
-      d: 0.12,
-      color: COLORS.wood,
-      collide: false,
-    })
+    bench(b, x, z)
   }
   // Baeume auf Platz und Terrasse. Die drei Kisten pro Kuebel waren dieselbe
   // Graybox wie beim Strassenbaum - hier steht jetzt derselbe Baukasten.
