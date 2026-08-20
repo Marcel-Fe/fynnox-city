@@ -243,8 +243,10 @@ function buildRoads(b: WorldBuilder): void {
     b.box({ x: 0, y: 0, z: edge, w: 160, h: 0.02, d: 0.14, color: COLORS.cream, collide: false })
   }
   // Gehwege je 2,0 m mit 0,15 m Bordstein.
-  b.box({ x: 0, y: 0, z: -16, w: 160, h: CURB_HEIGHT, d: 2, color: walk })
-  b.box({ x: 0, y: 0, z: -8, w: 160, h: CURB_HEIGHT, d: 2, color: walk })
+  for (const z of [-16, -8]) {
+    b.box({ x: 0, y: 0, z, w: 160, h: CURB_HEIGHT, d: 2, color: walk })
+    paveJoints(b, { x: 0, z, w: 160, d: 2, y: CURB_HEIGHT, spacing: 1.5 })
+  }
   // Strassenbahngleis: 1,5 m visuelle Spurweite, projektweit identisch.
   b.box({ x: 0, y: 0, z: -12.75, w: 160, h: 0.06, d: 0.12, color: COLORS.metal, collide: false })
   b.box({ x: 0, y: 0, z: -11.25, w: 160, h: 0.06, d: 0.12, color: COLORS.metal, collide: false })
@@ -262,36 +264,57 @@ function buildRoads(b: WorldBuilder): void {
   for (let z = -10; z < 36; z += 6) {
     b.box({ x: 0, y: 0, z, w: 0.14, h: 0.02, d: 3, color: COLORS.cream, collide: false })
   }
-  b.box({ x: -4, y: 0, z: 12, w: 2, h: CURB_HEIGHT, d: 48, color: walk })
-  b.box({ x: 4, y: 0, z: 12, w: 2, h: CURB_HEIGHT, d: 48, color: walk })
+  for (const x of [-4, 4]) {
+    b.box({ x, y: 0, z: 12, w: 2, h: CURB_HEIGHT, d: 48, color: walk })
+    paveJoints(b, { x, z: 12, w: 2, d: 48, y: CURB_HEIGHT, spacing: 1.5 })
+  }
 
   // Zufahrt zur Foxtail Garage.
   b.box({ x: -30, y: 0, z: -15, w: 8, h: 0.01, d: 8, color: road, collide: false })
 
-  // Platzflaeche zwischen Strasse und Promenade, mit Plattenfugen im 4-m-Raster.
+  // Platzflaeche zwischen Strasse und Promenade.
   b.box({ x: 0, y: 0, z: 2, w: 44, h: CURB_HEIGHT, d: 14, color: walk })
-  paveJoints(b, { x: 0, z: 2, w: 44, d: 14, y: CURB_HEIGHT, spacing: 4 })
+  paveJoints(b, { x: 0, z: 2, w: 44, d: 14, y: CURB_HEIGHT, spacing: 1.5 })
 }
 
 /**
- * Plattenfugen als duenne Linien auf einer Bodenflaeche. Ohne sie liest jede
- * grosse Flaeche als eine einzige leere Platte - das ist der Haupteindruck,
- * den die Bildreferenzen gerade nicht haben.
+ * Steinfugen auf einer Bodenflaeche.
+ *
+ * Ohne sie liest jede grosse Flaeche als eine einzige leere Platte - genau der
+ * Eindruck, den die Bildreferenzen nicht haben. Das Raster lag zuvor bei 3 bis
+ * 4 m; auf dieser Weite liest die Flaeche als vier Riesenplatten und nicht als
+ * Pflaster. Die Referenzen zeigen Steine deutlich unter einem Meter.
+ *
+ * Die Querfugen laufen im Halbversatz: durchgehende Kreuzfugen ergeben ein
+ * Schachbrett, und das sieht nach Kachel aus, nicht nach verlegtem Stein.
+ * Alle Fugen teilen eine Farbe und fallen deshalb in denselben Batch - sie
+ * kosten Dreiecke, aber keinen zusaetzlichen Draw-Call.
  */
 function paveJoints(
   b: WorldBuilder,
   o: { x: number; z: number; w: number; d: number; y: number; spacing: number },
 ): void {
-  const joint = 0.06
-  const countX = Math.floor(o.w / o.spacing)
-  for (let i = 1; i < countX; i++) {
-    const x = o.x - o.w / 2 + i * o.spacing
-    b.box({ x, y: o.y, z: o.z, w: joint, h: 0.008, d: o.d, color: COLORS.pavingJoint, collide: false })
-  }
-  const countZ = Math.floor(o.d / o.spacing)
+  const joint = 0.05
+  const line = (x: number, z: number, w: number, d: number) =>
+    b.box({ x, y: o.y, z, w, h: 0.008, d, color: COLORS.pavingJoint, collide: false })
+
+  const countZ = Math.max(1, Math.round(o.d / o.spacing))
+  const stepZ = o.d / countZ
   for (let i = 1; i < countZ; i++) {
-    const z = o.z - o.d / 2 + i * o.spacing
-    b.box({ x: o.x, y: o.y, z, w: o.w, h: 0.008, d: joint, color: COLORS.pavingJoint, collide: false })
+    line(o.x, o.z - o.d / 2 + i * stepZ, o.w, joint)
+  }
+  // Laengsfugen nur innerhalb eines Streifens, jede zweite Reihe um die halbe
+  // Steinlaenge versetzt - das ist der Laeuferverband der Referenzen.
+  const countX = Math.max(1, Math.round(o.w / o.spacing))
+  const stepX = o.w / countX
+  for (let row = 0; row < countZ; row++) {
+    const zMid = o.z - o.d / 2 + (row + 0.5) * stepZ
+    const offset = row % 2 === 0 ? 0 : stepX / 2
+    for (let i = 0; i < countX; i++) {
+      const x = o.x - o.w / 2 + i * stepX + offset
+      if (x <= o.x - o.w / 2 || x >= o.x + o.w / 2) continue
+      line(x, zMid, joint, stepZ)
+    }
   }
 }
 
@@ -1136,7 +1159,7 @@ function buildTransitWorks(b: WorldBuilder): {
 /** Promenade: 6,0 m freie Hauptbreite, Hafengelaender 1,1 m. */
 function buildPromenade(b: WorldBuilder): void {
   b.box({ x: 0, y: 0, z: 29, w: 120, h: CURB_HEIGHT, d: 6, color: COLORS.concrete })
-  paveJoints(b, { x: 0, z: 29, w: 120, d: 6, y: CURB_HEIGHT, spacing: 3 })
+  paveJoints(b, { x: 0, z: 29, w: 120, d: 6, y: CURB_HEIGHT, spacing: 1.5 })
   // Das Hafengelaender laesst an der Wassertaxi-Station eine 6 m breite Durchfahrt
   // frei - sonst waeren Dock, Werftstege und alle Wasserfahrzeuge zu Fuss
   // unerreichbar und nur per Teleport zu bespielen.
