@@ -104,6 +104,7 @@ export function buildDistrict(scene: THREE.Scene, collision: CollisionWorld): Di
   const b = new WorldBuilder(scene, collision)
 
   buildTerrain(b)
+  buildBackdrop(b)
   buildRoads(b)
   buildFoxtailGarage(b)
   const blockA = buildFacadeBuilding(b, {
@@ -229,6 +230,314 @@ export function buildDistrict(scene: THREE.Scene, collision: CollisionWorld): Di
     // Bauteilhoehe - wer sie als Sitzhoehe liest, setzt die Figur 15 cm zu tief
     // an und, weil unten die Huefthoehe fehlte, am Ende auf die Lehne.
     npcSeats: BENCH_SPOTS.map(([x, z]) => new THREE.Vector3(x, BENCH_SEAT_Y, z)),
+  }
+}
+
+/**
+ * Deterministische Streuung. Dieselbe Kulisse bei jedem Start - eine mit
+ * `Math.random()` gewuerfelte Bergkette saehe bei jedem Neuladen anders aus,
+ * und ein Spieler, der ein zweites Mal hinsieht, merkt genau das.
+ */
+function drift(seed: number): number {
+  const v = Math.sin(seed * 127.1 + 311.7) * 43758.5453
+  return v - Math.floor(v)
+}
+
+/** Weiche Kuppe: eine gestauchte Kugel, deren Unterhaelfte unter Grund liegt. */
+function backdropHill(
+  b: WorldBuilder,
+  x: number,
+  z: number,
+  radius: number,
+  height: number,
+  color: string,
+  seed: number,
+): void {
+  const sink = radius * 0.4
+  b.shape(
+    sphere(radius, 14, 8),
+    color,
+    {
+      pos: [x, -sink, z],
+      scale: [1, (height + sink) / radius, 0.6 + drift(seed) * 0.5],
+      rot: [0, drift(seed + 7) * Math.PI, 0],
+    },
+    { collide: false },
+  )
+}
+
+/** Kamm: ein grober Kegel, spitzer als eine Kuppe und deshalb weiter hinten. */
+function backdropPeak(
+  b: WorldBuilder,
+  x: number,
+  z: number,
+  radius: number,
+  height: number,
+  color: string,
+  seed: number,
+): void {
+  const base = -8
+  const full = height - base
+  b.shape(
+    cone(radius, full, 7),
+    color,
+    {
+      pos: [x, base + full / 2, z],
+      rot: [0, drift(seed) * Math.PI, 0],
+      scale: [1, 1, 0.65 + drift(seed + 3) * 0.4],
+    },
+    { collide: false },
+  )
+}
+
+/**
+ * Kulissenstadt hinter der Spielflaeche.
+ *
+ * Das Gelaende endet bei z = -60, und dahinter lag zuletzt Wiese mit Wald. In
+ * den Bildreferenzen blickt man von jedem erhoehten Punkt ueber Daecher,
+ * Gassen und Hoefe - erst dahinter kommen Huegel. Eine Stadt, die nach 60 m in
+ * Gruenland uebergeht, liest als Modell auf einem Tisch, nicht als Stadt.
+ *
+ * Der Aufbau ist ein Raster mit Luecken: die freien Felder sind die Gassen,
+ * und ohne sie waere es eine geschlossene Mauer. Zur Tiefe hin werden die
+ * Haeuser niedriger, damit die Huegel dahinter sichtbar bleiben.
+ *
+ * Alles ohne Kollision. Erreichbar ist davon nichts - die Kulisse beginnt
+ * 10 m hinter der letzten begehbaren Flaeche.
+ */
+function buildBackdropTown(b: WorldBuilder): void {
+  const walls = [
+    COLORS.townFarCream,
+    COLORS.townFarCoral,
+    COLORS.townFarTeal,
+    COLORS.townFarBlue,
+    COLORS.townFarCream,
+  ]
+  // Stadtboden unter der Kulisse. Ohne ihn stehen die Haeuser auf Wiese - in
+  // den Bildreferenzen liegt zwischen den Blocks Pflaster, kein Gruen.
+  b.box({ x: 0, y: -1, z: -140, w: 560, h: 1.06, d: 150, color: COLORS.townFarGround, collide: false })
+
+  const stepX = 20
+  const stepZ = 18
+  let seed = 700
+  for (let ix = -12; ix <= 12; ix++) {
+    for (let iz = 0; iz < 8; iz++) {
+      seed += 1
+      // Gassen: einzelne Felder bleiben frei. Vorher blieb jedes vierte frei -
+      // bei 26 m Raster und 13 m Haeusern stand die Kulisse dadurch so weit
+      // auseinander, dass zwischen den Haeusern mehr Wiese lag als Stadt.
+      if (drift(seed) < 0.13) continue
+      const x = ix * stepX + (drift(seed + 1) - 0.5) * 5
+      const z = -82 - iz * stepZ - drift(seed + 2) * 6
+      const depth = iz / 7
+      const height = 7 + (1 - depth) * 3.5 + drift(seed + 3) * 9
+      const w = 15 + drift(seed + 4) * 8
+      const d = 13 + drift(seed + 5) * 6
+      const wall = walls[Math.floor(drift(seed + 6) * walls.length) % walls.length]
+      b.box({ x, y: 0, z, w, h: height, d, color: wall, collide: false })
+      b.box({ x, y: height, z, w: w + 1.1, h: 0.7, d: d + 1.1, color: COLORS.townFarRoof, collide: false })
+      // Sockelgeschoss und Fensterbaender - nur auf den vorderen Reihen, weiter
+      // hinten waeren sie kleiner als ein Pixel.
+      //
+      // Ohne die Baender ist jedes dieser Haeuser ein einfarbiger Klotz, und
+      // ein Klotz in 40 m Entfernung liest als Klotz, nicht als Haus. Ein
+      // liegendes Band je Geschoss reicht: es gibt der Flaeche einen Massstab.
+      if (iz < 4) {
+        b.box({ x, y: 0, z, w: w + 0.2, h: 3.2, d: d + 0.2, color: COLORS.townFarTeal, collide: false })
+        const floors = Math.floor((height - 3.6) / 3.2)
+        for (let f = 0; f < floors; f++) {
+          const y = 3.9 + f * 3.2
+          for (const side of [-1, 1]) {
+            b.box({
+              x,
+              y,
+              z: z + (side * (d + 0.24)) / 2,
+              w: w - 2.6,
+              h: 1.5,
+              d: 0.12,
+              color: COLORS.townFarWindow,
+              collide: false,
+            })
+            b.box({
+              x: x + (side * (w + 0.24)) / 2,
+              y,
+              z,
+              w: 0.12,
+              h: 1.5,
+              d: d - 2.6,
+              color: COLORS.townFarWindow,
+              collide: false,
+            })
+          }
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Ferne Kulisse: Kueste, Huegelketten und eine Stadt am Horizont.
+ *
+ * Ohne sie endet die Welt an einer Kante. Die Spielflaeche reicht von x -80
+ * bis 80 und von z -60 bis 34, dahinter lag Wasser und darueber leerer Himmel -
+ * im Bild kein Horizont, keine Tiefe, und die Stadt schwebte auf einer Platte.
+ * Genau daran unterscheidet sich der Anblick am staerksten von den
+ * Bildreferenzen, in denen sich Huegel, Hochhaeuser und Berge staffeln.
+ *
+ * Drei Regeln halten das zusammen:
+ * 1. Alles ohne Kollision und weit ausserhalb - die Kulisse ist nie erreichbar.
+ * 2. Luftperspektive statt Detail: je weiter hinten, desto heller und blauer.
+ *    Der Nebel (ab 140 m) blendet zusaetzlich zur Horizontfarbe hin.
+ * 3. Nichts steht naeher als 70 m. Naeher wuerde die grobe Form auffallen.
+ */
+function buildBackdrop(b: WorldBuilder): void {
+  // Gegenueberliegende Kueste als Ring um die Bucht. Eine liegende Scheibe mit
+  // Loch: innen bleibt das Hafenbecken frei, aussen schliesst der Horizont.
+  b.shape(
+    new THREE.RingGeometry(178, 340, 72, 1),
+    COLORS.coastFar,
+    { pos: [0, 0.5, 30], rot: [-Math.PI / 2, 0, 0] },
+    { collide: false },
+  )
+
+  // Hinterland: das Gelaende endet bei z = -60. Ohne Boden dahinter klafft
+  // zwischen Stadtrand und Huegelfuss ein Streifen Himmel dort, wo Land sein
+  // muesste - vom Dach aus sofort zu sehen.
+  b.box({ x: 0, y: -1, z: -180, w: 660, h: 1.04, d: 250, color: COLORS.hinterland, collide: false })
+  // Als flache Ebene las das Hinterland als leere Wiese bis zum Horizont. In
+  // den Bildreferenzen liegt die Stadt an einem Hang, hinter ihr steigt das
+  // Land an. Diese breiten Kuppen sind dieser Hang - und sie bleiben flach:
+  // ein hoher Wall verdeckt vom Dach aus die gesamte Bergkette dahinter und
+  // macht aus der Staffelung wieder eine einzige gruene Wand.
+  for (let i = 0; i < 13; i++) {
+    const t = i / 12
+    backdropHill(
+      b,
+      -260 + t * 520,
+      -98 - drift(i + 240) * 20,
+      98 + drift(i + 260) * 44,
+      6 + drift(i + 280) * 5,
+      COLORS.hillNear,
+      i + 240,
+    )
+  }
+  // Waldflecken auf dem Hinterland. Ohne sie ist es eine einfarbige Flaeche -
+  // gerade weil sie so gross ist, faellt jeder fehlende Bewuchs auf. Zwei
+  // Gruentoene im Wechsel, sonst liest der Wald als ein einziger Teppich.
+  for (let i = 0; i < 46; i++) {
+    const x = -300 + drift(i + 500) * 600
+    // Erst hinter der Kulissenstadt: naeher gesetzt wurden aus Waldflecken
+    // gruene Blasen, die groesser waren als die Haeuser davor.
+    const z = -178 - drift(i + 540) * 90
+    backdropHill(
+      b,
+      x,
+      z,
+      13 + drift(i + 580) * 16,
+      6 + drift(i + 620) * 9,
+      drift(i + 660) > 0.5 ? COLORS.woodFar : COLORS.woodFarDark,
+      i + 500,
+    )
+  }
+  buildBackdropTown(b)
+
+  // Nordflanke: hinter der Stadt steigt das Land an. Die Kette stand zuerst bei
+  // z = -84 und damit knapp 50 m hinter dem letzten Haus - im Bild eine gruene
+  // Wand, kein Hinterland. Ferne entsteht durch Abstand, nicht durch Groesse.
+  for (let i = 0; i < 18; i++) {
+    const t = i / 17
+    const x = -240 + t * 480
+    const z = -132 - drift(i) * 34
+    backdropHill(b, x, z, 54 + drift(i + 20) * 30, 24 + drift(i + 40) * 18, COLORS.hillNear, i)
+  }
+  // Zweite Kette, hoeher und schon deutlich blauer.
+  for (let i = 0; i < 15; i++) {
+    const t = i / 14
+    const x = -290 + t * 580
+    const z = -212 - drift(i + 60) * 44
+    backdropHill(b, x, z, 74 + drift(i + 80) * 40, 42 + drift(i + 100) * 26, COLORS.hillMid, i + 60)
+  }
+  // Bergkamm ganz hinten, rund um die Bucht. Zwei versetzte Reihen statt einer:
+  // bei nur einer Reihe schoben die schwankenden Abstaende Luecken auf, durch
+  // die der leere Himmel bis auf die Wasserlinie durchsah.
+  for (const row of [
+    { count: 34, base: 262, seed: 120, height: 36 },
+    { count: 30, base: 316, seed: 400, height: 48 },
+  ]) {
+    for (let i = 0; i < row.count; i++) {
+      const angle = -Math.PI * 0.16 + (i / (row.count - 1)) * Math.PI * 1.32
+      const radius = row.base + drift(i + row.seed) * 34
+      backdropPeak(
+        b,
+        Math.cos(angle) * radius,
+        30 - Math.sin(angle) * radius,
+        64 + drift(i + row.seed + 20) * 44,
+        row.height + drift(i + row.seed + 40) * 42,
+        COLORS.ridgeFar,
+        i + row.seed,
+      )
+    }
+  }
+  // Huegel auf der gegenueberliegenden Kueste, damit die Ringkante nicht als
+  // gerade Linie im Wasser steht.
+  for (let i = 0; i < 14; i++) {
+    const angle = Math.PI * 0.08 + (i / 13) * Math.PI * 0.84
+    const radius = 196 + drift(i + 180) * 26
+    backdropHill(
+      b,
+      Math.cos(angle) * radius,
+      30 + Math.sin(angle) * radius,
+      30 + drift(i + 200) * 20,
+      12 + drift(i + 220) * 14,
+      COLORS.hillMid,
+      i + 180,
+    )
+  }
+
+  /**
+   * Ferne Stadt. Drei Gruppen statt einer gleichmaessigen Reihe - eine Skyline
+   * hat Schwerpunkte, und ein Turm, der aus ihr herausragt, gibt dem Blick
+   * einen Halt. In der Bildreferenz ist das ein schlanker heller Hochhausturm.
+   */
+  const clusters: { x: number; z: number; count: number; peak: number }[] = [
+    { x: -132, z: -196, count: 13, peak: 46 },
+    { x: 58, z: -214, count: 16, peak: 74 },
+    { x: 196, z: 108, count: 11, peak: 38 },
+  ]
+  let seed = 300
+  for (const c of clusters) {
+    for (let i = 0; i < c.count; i++) {
+      seed += 1
+      const dx = (drift(seed) - 0.5) * 88
+      const dz = (drift(seed + 1) - 0.5) * 46
+      // Hohe Haeuser in der Mitte der Gruppe, niedrige am Rand: sonst steht die
+      // Skyline als Zaun aus gleich hohen Latten.
+      const falloff = 1 - Math.min(1, Math.abs(dx) / 46)
+      const height = 14 + falloff * c.peak * (0.55 + drift(seed + 2) * 0.6)
+      const width = 9 + drift(seed + 3) * 12
+      b.box({
+        x: c.x + dx,
+        y: 0,
+        z: c.z + dz,
+        w: width,
+        h: height,
+        d: width * (0.7 + drift(seed + 4) * 0.6),
+        color: drift(seed + 5) > 0.55 ? COLORS.cityFar : COLORS.cityFarShade,
+        collide: false,
+      })
+    }
+    // Ein Turm je Gruppe, deutlich hoeher als der Rest.
+    b.box({
+      x: c.x + 6,
+      y: 0,
+      z: c.z - 8,
+      w: 11,
+      h: c.peak * 1.7,
+      d: 11,
+      color: COLORS.cityFar,
+      collide: false,
+    })
+    b.shape(cone(7.5, 16, 6), COLORS.cityFar, { pos: [c.x + 6, c.peak * 1.7 + 8, c.z - 8] }, { collide: false })
   }
 }
 

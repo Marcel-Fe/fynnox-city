@@ -1,0 +1,8 @@
+[
+  { "name": "k-nord-dach", "pos": [9, 7.9, -33], "yaw": 0 },
+  { "name": "k-nord-strasse", "pos": [-2, 0.4, -8], "yaw": 0 },
+  { "name": "k-west-dach", "pos": [9, 7.9, -28], "yaw": 1.5708 },
+  { "name": "k-ost-dach", "pos": [9, 7.9, -28], "yaw": -1.5708 },
+  { "name": "k-sued-dach", "pos": [9, 7.9, -24], "yaw": 3.1416 },
+  { "name": "k-promenade", "pos": [0, 0.4, 30], "yaw": 3.1416 }
+]

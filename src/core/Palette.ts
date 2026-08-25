@@ -44,6 +44,33 @@ export const COLORS = {
   bronzeDark: '#7E522A',
   /** Laternenfeuer des Leuchtturms. Hell genug, um in den Blueten zu stehen. */
   lanternGlow: '#FFEDB4',
+  // Ferne Kulisse. Die Staffelung ist Luftperspektive: je weiter weg, desto
+  // heller, blauer und entsaettigter. Der Nebel blendet zusaetzlich zur
+  // Horizontfarbe hin, deshalb sind schon die Grundtoene angehoben - eine
+  // saftig gruene Kuppe in 200 m Entfernung liest als Fehler, nicht als Huegel.
+  hillNear: '#8FA98A',
+  hillMid: '#94ADAD',
+  ridgeFar: '#AEC2C8',
+  coastFar: '#A8B7AE',
+  /** Wald- und Wiesenland hinter der Stadt, auf dem die Huegelketten stehen. */
+  hinterland: '#7E9479',
+  woodFar: '#6C8869',
+  woodFarDark: '#5C7A5C',
+  /**
+   * Kulissenstadt hinter der Spielflaeche. Dieselben Fassadenfarben wie in der
+   * begehbaren Stadt, nur eine Spur blasser - sie steht 70 bis 170 m weit weg,
+   * wo der Nebel noch nicht greift, und wuerde in voller Saettigung naeher
+   * wirken als die Haeuser davor.
+   */
+  townFarCream: '#E7DCC6',
+  townFarCoral: '#D28F72',
+  townFarTeal: '#5F959A',
+  townFarBlue: '#8AA0AF',
+  townFarWindow: '#7FA8B4',
+  townFarRoof: '#43566A',
+  townFarGround: '#B9B3A2',
+  cityFar: '#B4BEC0',
+  cityFarShade: '#98A5AC',
   // Vegetation nach 23_Natur_und_Kleinobjekte/01_Vegetation. Die Kronen sind
   // dort nie einfarbig - Sonnenseite hell, Kern dunkel.
   foliageLight: '#7FBB6A',

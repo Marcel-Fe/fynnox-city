@@ -1,0 +1,6 @@
+[
+  { "name": "v-dach", "pos": [9, 7.9, -24], "yaw": 3.1416 },
+  { "name": "v-platz", "pos": [0, 0.4, 0], "yaw": 3.1416 },
+  { "name": "v-promenade", "pos": [0, 0.4, 27], "yaw": 3.1416 },
+  { "name": "v-strasse", "pos": [-6, 0.4, -8], "yaw": -1.5708 }
+]
