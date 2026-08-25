@@ -1,0 +1,6 @@
+[
+  { "name": "turm-gasse", "pos": [1.0, 0.4, -16.5], "yaw": 0 },
+  { "name": "turm-nah", "pos": [1.0, 0.4, -21.0], "yaw": 0 },
+  { "name": "turm-dach", "pos": [6.5, 7.6, -26.0], "yaw": 1.5708 },
+  { "name": "turm-schraeg", "pos": [-3.5, 0.4, -18.0], "yaw": -0.35 }
+]

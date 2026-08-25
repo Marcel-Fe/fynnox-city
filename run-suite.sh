@@ -10,7 +10,9 @@ for i in 1 2 3 4 5 6 7 8 9 10; do
   curl -s -o /dev/null "http://127.0.0.1:$PORT/" && break
   sleep 1
 done
-node "$1" ./shots "http://127.0.0.1:$PORT/"
+SCRIPT="$1"
+shift
+node "$SCRIPT" ./shots "http://127.0.0.1:$PORT/" "$@"
 STATUS=$?
 kill $SERVER 2>/dev/null
 exit $STATUS
