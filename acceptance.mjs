@@ -16,6 +16,11 @@ function check(name, ok, detail = '') {
  * Softwarerenderer im Headless-Betrieb braucht fuer den Weltaufbau ohnehin
  * rund neun Sekunden. Sobald eine zweite Seite parallel rendert - die
  * Mobilansicht weiter unten - reichten die alten 30 s nicht mehr zuverlaessig.
+ *
+ * Achtung auf die Argumentfolge: `waitForFunction(fn, arg, options)`. Stand die
+ * Wartezeit an zweiter Stelle, war sie das Argument der Funktion und Playwright
+ * nahm still die Standardzeit von 30 s - der Lauf brach dann mit "Timeout
+ * 30000ms" ab, obwohl im Code 90000 stand.
  */
 const browser = await chromium.launch()
 const page = await browser.newPage({ viewport: { width: 1280, height: 780 } })
@@ -26,7 +31,7 @@ page.on('console', (m) => {
 page.on('pageerror', (e) => errors.push(String(e)))
 
 await page.goto(URL, { waitUntil: 'networkidle' })
-await page.waitForFunction(() => window.fynnoxQa !== undefined, { timeout: 90000 })
+await page.waitForFunction(() => window.fynnoxQa !== undefined, null, { timeout: 90000 })
 
 const state = () => page.evaluate(() => window.fynnoxQa.state())
 const wait = (ms) => page.waitForTimeout(ms)
@@ -271,7 +276,7 @@ const before = await state()
 await page.evaluate(() => window.fynnoxQa.save())
 await wait(500)
 await page.reload({ waitUntil: 'networkidle' })
-await page.waitForFunction(() => window.fynnoxQa !== undefined, { timeout: 90000 })
+await page.waitForFunction(() => window.fynnoxQa !== undefined, null, { timeout: 90000 })
 await wait(1500)
 const after = await state()
 check('Raetselzustand ueberlebt Neuladen', after.puzzleSolved === before.puzzleSolved)
@@ -297,7 +302,7 @@ const mobile = await browser.newPage({
   deviceScaleFactor: 3,
 })
 await mobile.goto(URL, { waitUntil: 'networkidle' })
-await mobile.waitForFunction(() => window.fynnoxQa !== undefined, { timeout: 90000 })
+await mobile.waitForFunction(() => window.fynnoxQa !== undefined, null, { timeout: 90000 })
 await mobile.waitForTimeout(1500)
 await mobile.evaluate(() => window.fynnoxQa.closeOnboarding())
 await mobile.waitForTimeout(900)

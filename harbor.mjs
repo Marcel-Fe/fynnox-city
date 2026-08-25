@@ -18,7 +18,7 @@ page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()) })
 page.on('pageerror', (e) => errors.push(String(e)))
 
 await page.goto(URL, { waitUntil: 'networkidle' })
-await page.waitForFunction(() => window.fynnoxQa !== undefined, { timeout: 90000 })
+await page.waitForFunction(() => window.fynnoxQa !== undefined, null, { timeout: 90000 })
 await page.evaluate(() => localStorage.clear())
 
 const state = () => page.evaluate(() => window.fynnoxQa.state())
@@ -138,7 +138,7 @@ check('Belohnung ausgezahlt', reported.wallet === walletBefore + 20,
 await page.evaluate(() => window.fynnoxQa.save())
 await wait(500)
 await page.reload({ waitUntil: 'networkidle' })
-await page.waitForFunction(() => window.fynnoxQa !== undefined, { timeout: 90000 })
+await page.waitForFunction(() => window.fynnoxQa !== undefined, null, { timeout: 90000 })
 await wait(1500)
 const after = await state()
 check('Hafenauftrag ueberlebt Neuladen', after.harborTask === 'reported', after.harborTask)

@@ -29,7 +29,7 @@ page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()) })
 page.on('pageerror', (e) => errors.push(String(e)))
 
 await page.goto(URL, { waitUntil: 'networkidle' })
-await page.waitForFunction(() => window.fynnoxQa !== undefined, { timeout: 90000 })
+await page.waitForFunction(() => window.fynnoxQa !== undefined, null, { timeout: 90000 })
 await page.evaluate(() => localStorage.clear())
 
 const state = () => page.evaluate(() => window.fynnoxQa.state())
