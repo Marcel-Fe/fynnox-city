@@ -25,6 +25,25 @@ export const CURB_HEIGHT = 0.15
  */
 export const BENCH_SEAT_Y = CURB_HEIGHT + 0.45
 
+/**
+ * Standorte aller Parkbaenke. Eine Liste, weil dieselben Punkte zweimal
+ * gebraucht werden - zum Bauen in `buildProps()` und als Sitzanker in
+ * `npcSeats`. Vorher standen sie doppelt im Code; wer eine Bank versetzte,
+ * liess die Ambient-Figur auf dem alten Platz in der Luft sitzen.
+ *
+ * Die vierte Bank stand bei x -24 und damit 2 m oestlich vom Startpunkt
+ * (-26). Die Kamera blickt zum Start nach +X, Fynnox laeuft also beim ersten
+ * Schritt in die Bank hinein und kam in der Abnahme auf 0,80 m statt der
+ * geforderten 2,0 m. Sie sitzt jetzt weiter oestlich am selben Gehweg,
+ * zwischen den Laternen bei x -24 und x -8.
+ */
+const BENCH_SPOTS: [number, number][] = [
+  [-8, 27.5],
+  [-4, 27.5],
+  [14, 10],
+  [-16, -16.2],
+]
+
 export interface DistrictAnchors {
   playerStart: THREE.Vector3
   vehicleStart: { position: THREE.Vector3; heading: number }
@@ -86,7 +105,7 @@ export function buildDistrict(scene: THREE.Scene, collision: CollisionWorld): Di
 
   buildTerrain(b)
   buildRoads(b)
-  const garage = buildFoxtailGarage(b)
+  buildFoxtailGarage(b)
   const blockA = buildFacadeBuilding(b, {
     x0: 4,
     z0: -34,
@@ -209,12 +228,7 @@ export function buildDistrict(scene: THREE.Scene, collision: CollisionWorld): Di
     // dem Gehweg (0,15 m) und ist 0,45 m hoch. Die 0,45 allein waren die
     // Bauteilhoehe - wer sie als Sitzhoehe liest, setzt die Figur 15 cm zu tief
     // an und, weil unten die Huefthoehe fehlte, am Ende auf die Lehne.
-    npcSeats: [
-      new THREE.Vector3(-8, BENCH_SEAT_Y, 27.5),
-      new THREE.Vector3(-4, BENCH_SEAT_Y, 27.5),
-      new THREE.Vector3(14, BENCH_SEAT_Y, 10),
-      new THREE.Vector3(garage.x + 6, BENCH_SEAT_Y, -16.2),
-    ],
+    npcSeats: BENCH_SPOTS.map(([x, z]) => new THREE.Vector3(x, BENCH_SEAT_Y, z)),
   }
 }
 
@@ -2013,12 +2027,7 @@ function buildStreetDressing(b: WorldBuilder, sway: { scene: THREE.Scene; out: T
 }
 
 function buildProps(b: WorldBuilder): void {
-  for (const [x, z] of [
-    [-8, 27.5],
-    [-4, 27.5],
-    [14, 10],
-    [-24, -16.2],
-  ]) {
+  for (const [x, z] of BENCH_SPOTS) {
     bench(b, x, z)
   }
   // Baeume auf Platz und Terrasse. Die drei Kisten pro Kuebel waren dieselbe
