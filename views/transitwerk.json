@@ -1,0 +1,6 @@
+[
+  { "name": "werk-ost", "pos": [2.0, 0.4, 18], "yaw": 1.5708 },
+  { "name": "werk-treppe", "pos": [0.0, 0.4, 23.0], "yaw": 0.9 },
+  { "name": "werk-sued", "pos": [-11, 0.4, 31], "yaw": 0 },
+  { "name": "werk-nordwest", "pos": [-24, 0.4, 8.0], "yaw": -2.5 }
+]

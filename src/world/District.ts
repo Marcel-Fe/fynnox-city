@@ -1143,11 +1143,13 @@ function stairDressing(
     dir: 'north' | 'south'
     /** -1 West, +1 Ost. Standard beide Seiten. */
     sides?: (-1 | 1)[]
+    /** Wangenfarbe. Standard Beton; die Wartungstreppe am Werk ist aus Stahl. */
+    stringer?: string
   },
 ): void {
   const rise = 0.16
   const run = 0.3
-  const { x, y, z, width, steps, dir, sides = [-1, 1] } = opts
+  const { x, y, z, width, steps, dir, sides = [-1, 1], stringer = COLORS.concrete } = opts
   const sign = dir === 'north' ? -1 : 1
   const length = steps * Math.hypot(rise, run)
   const midZ = z + (sign * steps * run) / 2
@@ -1160,7 +1162,7 @@ function stairDressing(
     const railX = x + side * (width / 2 - 0.06)
     b.shape(
       new THREE.BoxGeometry(0.12, 0.42, length),
-      COLORS.concrete,
+      stringer,
       { pos: [railX, midY - 0.12, midZ], rot: [rotX, 0, 0] },
       { collide: false },
     )
@@ -1318,6 +1320,99 @@ function buildParkourRoute(
 }
 
 /**
+ * Fassadengliederung des Transitwerks.
+ *
+ * Der Baukoerper war ein Quader von 10 x 8 x 5 m in einer einzigen dunklen
+ * Farbe - von aussen ein Loch in der Stadt, weil ihm alles fehlte, woran das
+ * Auge Groesse abliest: Fusspunkt, Ecke, Traufe, Oeffnung. Ein Werk der
+ * Verkehrsbetriebe traegt keine Wohnfenster, sondern hohe Industrieverglasung
+ * zwischen Stahlstuetzen, ein Tor auf der Betriebsseite und Lueftung unter der
+ * Traufe.
+ *
+ * Alles ohne Kollision - der Grundkoerper traegt sie bereits. Die Suedseite
+ * bleibt frei von Verglasung: dort stehen die beiden Ventile des Raetsels und
+ * der Sturz der offenen Halle.
+ */
+function dressTransitWorks(
+  b: WorldBuilder,
+  m: { x0: number; z0: number; w: number; d: number; h: number },
+): void {
+  const { x0, z0, w, d, h } = m
+  const cx = x0 + w / 2
+  const cz = z0 + d / 2
+  const put = (
+    x: number,
+    y: number,
+    z: number,
+    ww: number,
+    hh: number,
+    dd: number,
+    color: string,
+  ) => b.box({ x, y, z, w: ww, h: hh, d: dd, color, collide: false })
+
+  // Sockel und Traufband ringsum.
+  put(cx, 0, cz, w + 0.3, 0.65, d + 0.3, COLORS.stoneShade)
+  put(cx, h - 0.45, cz, w + 0.34, 0.45, d + 0.34, COLORS.metal)
+  // Stahlstuetzen: vier Ecken und je eine Mittelstuetze auf den Langseiten.
+  const posts: [number, number][] = [
+    [x0 + 0.2, z0 + 0.2],
+    [x0 + w - 0.2, z0 + 0.2],
+    [x0 + 0.2, z0 + d - 0.2],
+    [x0 + w - 0.2, z0 + d - 0.2],
+    [cx, z0 + 0.2],
+    [cx, z0 + d - 0.2],
+  ]
+  for (const [px, pz] of posts) put(px, 0.5, pz, 0.4, h - 0.9, 0.4, COLORS.groundTeal)
+
+  /**
+   * Industriefenster: ein Glasfeld hinter einem Sprossenkreuz. Der Rahmen
+   * steht vor dem Glas, sonst verschwindet er dahinter; die Sprossen sind
+   * das Merkmal, an dem ein Werkfenster als Werkfenster liest.
+   */
+  const shopWindow = (x: number, z: number, ww: number, facing: 'x' | 'z') => {
+    const alongZ = facing === 'z'
+    const sign = alongZ ? (z > cz ? 1 : -1) : x > cx ? 1 : -1
+    const y = 1.5
+    const hh = 2.4
+    const fx = alongZ ? x : x + sign * 0.06
+    const fz = alongZ ? z + sign * 0.06 : z
+    const bar = (px: number, py: number, pz: number, pw: number, ph: number) =>
+      put(px, py, pz, alongZ ? pw : 0.14, ph, alongZ ? 0.14 : pw, COLORS.metal)
+
+    put(x, y, z, alongZ ? ww : 0.12, hh, alongZ ? 0.12 : ww, COLORS.glass)
+    // Rahmen: Sturz, Bruestung, zwei Pfosten.
+    bar(fx, y + hh, fz, ww + 0.28, 0.14)
+    bar(fx, y - 0.14, fz, ww + 0.28, 0.14)
+    for (const side of [-1, 1]) {
+      const off = (side * (ww + 0.14)) / 2
+      bar(alongZ ? fx + off : fx, y, alongZ ? fz : fz + off, 0.14, hh)
+    }
+    // Sprossen: zwei senkrechte, eine waagerechte.
+    for (const t of [-1 / 3, 1 / 3]) {
+      const off = t * ww
+      bar(alongZ ? fx + off : fx, y, alongZ ? fz : fz + off, 0.08, hh)
+    }
+    bar(fx, y + hh / 2, fz, ww, 0.08)
+  }
+
+  // Nordseite (Betriebsseite) und die beiden Schmalseiten.
+  for (const sx of [-1, 1]) shopWindow(cx + sx * 2.4, z0 + 0.04, 3.2, 'z')
+  for (const sz of [-1, 1]) shopWindow(x0 + 0.04, cz + sz * 1.9, 2.6, 'x')
+  for (const sz of [-1, 1]) shopWindow(x0 + w - 0.04, cz + sz * 1.9, 2.6, 'x')
+
+  // Werktor auf der Nordseite, zwischen den beiden Fensterfeldern.
+  put(cx, 0, z0 - 0.06, 3.4, 3.6, 0.18, COLORS.metal)
+  for (let i = 0; i < 6; i++) {
+    put(cx, 0.25 + i * 0.55, z0 - 0.16, 3.1, 0.34, 0.1, COLORS.groundTeal)
+  }
+  // Lueftungsgitter unter der Traufe und Fallrohre an den Nordecken.
+  for (const sx of [-1, 1]) {
+    put(cx + sx * 3.6, h - 1.5, z0 - 0.08, 1.4, 0.9, 0.12, COLORS.iron)
+    put(x0 + (sx > 0 ? w - 0.45 : 0.45), 0.65, z0 - 0.12, 0.2, h - 1.1, 0.2, COLORS.metal)
+  }
+}
+
+/**
  * Transitwerk: Ort des Licht-/Scanner-Raetsels.
  * Zwei Ventile und ein Lichtstrahl - Beobachtung und Reihenfolge statt Kampf.
  */
@@ -1335,9 +1430,19 @@ function buildTransitWorks(b: WorldBuilder): {
   b.box({ x: x0 + 5, y: 3.4, z: z0 + 8.1, w: 6, h: 1.6, d: 0.3, color: COLORS.navy, collide: false })
   // Rohrleitung als Wegweiser zum Hafen.
   b.box({ x: x0 + 5, y: 3.8, z: z0 + 12, w: 0.6, h: 0.6, d: 8, color: COLORS.metal, collide: false })
+  dressTransitWorks(b, { x0, z0, w: 10, d: 8, h: 5 })
 
   // Der "vierte Weg": Wartungstreppe auf das Dach, hinter einem Tor.
-  b.stairs({ x: x0 + 11.2, y: 0, z: z0 + 8, width: 1.4, steps: 34, color: COLORS.metal, dir: 'north' })
+  b.stairs({ x: x0 + 11.2, y: 0, z: z0 + 8, width: 1.4, steps: 34, color: COLORS.metal, dir: 'north', open: true })
+  stairDressing(b, {
+    x: x0 + 11.2,
+    y: 0,
+    z: z0 + 8,
+    width: 1.4,
+    steps: 34,
+    dir: 'north',
+    stringer: COLORS.metal,
+  })
   // Podest schwenkt vom Treppenkopf auf die Dachflaeche.
   b.box({ x: x0 + 10.7, y: 5.24, z: z0 - 0.4, w: 3.4, h: 0.2, d: 3.2, color: COLORS.metal })
 
