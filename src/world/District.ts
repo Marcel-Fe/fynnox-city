@@ -1118,6 +1118,87 @@ function buildClockPavilion(b: WorldBuilder): void {
  * Sprungluecken bleiben unter 2,0 m (Paketvorgabe fuer P0-Parkour).
  * Zusaetzlich gibt es eine barrierearme Treppe auf dasselbe Dach.
  */
+/**
+ * Ruestet einen geraden Treppenlauf aus: sichtbare Wange, geneigter Handlauf
+ * mit Pfosten und ein Kontrastband auf jeder Stufennase.
+ *
+ * Ohne das sind 47 gleich graue Betonquader uebereinandergestapelt - im Bild
+ * eine Rampe mit Rillen, keine Treppe. Die Nasenbaender sind ausserdem das,
+ * was eine oeffentliche Treppe begehbar macht: ohne Kontrast verschwindet die
+ * Stufenkante im Gegenlicht.
+ *
+ * Alles ohne Kollision. Die Stufen selbst tragen die Kollision; ein Handlauf
+ * mit eigener Box haette den 1,8 m breiten Lauf verengt und die barrierearme
+ * Alternative der Parkourroute unbegehbar gemacht.
+ */
+function stairDressing(
+  b: WorldBuilder,
+  opts: {
+    x: number
+    y: number
+    z: number
+    width: number
+    steps: number
+    /** Richtung, in die die Treppe ansteigt - wie bei `WorldBuilder.stairs()`. */
+    dir: 'north' | 'south'
+    /** -1 West, +1 Ost. Standard beide Seiten. */
+    sides?: (-1 | 1)[]
+  },
+): void {
+  const rise = 0.16
+  const run = 0.3
+  const { x, y, z, width, steps, dir, sides = [-1, 1] } = opts
+  const sign = dir === 'north' ? -1 : 1
+  const length = steps * Math.hypot(rise, run)
+  const midZ = z + (sign * steps * run) / 2
+  const midY = y + (steps * rise) / 2
+  // Die Laengsachse der Box (lokales +Z) auf die Steigung drehen. Das Vorzeichen
+  // kippt mit der Laufrichtung, der Betrag ist der Steigungswinkel selbst.
+  const rotX = -sign * Math.atan2(rise, run)
+
+  for (const side of sides) {
+    const railX = x + side * (width / 2 - 0.06)
+    b.shape(
+      new THREE.BoxGeometry(0.12, 0.42, length),
+      COLORS.concrete,
+      { pos: [railX, midY - 0.12, midZ], rot: [rotX, 0, 0] },
+      { collide: false },
+    )
+    b.shape(
+      new THREE.BoxGeometry(0.07, 0.07, length),
+      COLORS.iron,
+      { pos: [railX, midY + 1.05, midZ], rot: [rotX, 0, 0] },
+      { collide: false },
+    )
+    const posts = Math.max(2, Math.round((steps * run) / 1.2))
+    for (let i = 0; i <= posts; i++) {
+      const t = i / posts
+      b.box({
+        x: railX,
+        y: y + t * steps * rise,
+        z: z + sign * t * steps * run,
+        w: 0.06,
+        h: 1.05,
+        d: 0.06,
+        color: COLORS.iron,
+        collide: false,
+      })
+    }
+  }
+  for (let i = 0; i < steps; i++) {
+    b.box({
+      x,
+      y: y + rise * (i + 1) - 0.015,
+      z: z + sign * (run * i + 0.03),
+      w: width - 0.18,
+      h: 0.015,
+      d: 0.06,
+      color: COLORS.gold,
+      collide: false,
+    })
+  }
+}
+
 function buildParkourRoute(
   b: WorldBuilder,
   a: { x0: number; z0: number; w: number; d: number; height: number },
@@ -1161,23 +1242,64 @@ function buildParkourRoute(
   const flight1Steps = 23 // 3,68 m
   const flight1Base = a.z0 + 11
   b.stairs({ x: towerX, y: 0, z: flight1Base, width: 1.8, steps: flight1Steps, color: COLORS.concrete, dir: 'north' })
+  stairDressing(b, { x: towerX, y: 0, z: flight1Base, width: 1.8, steps: flight1Steps, dir: 'north' })
   const landingY = flight1Steps * 0.16
   const landingZ = flight1Base - flight1Steps * 0.3 - 1.2
   b.box({ x: towerX, y: landingY, z: landingZ, w: 1.8, h: 0.2, d: 2.4, color: COLORS.concrete })
   const flight2Steps = 24 // weitere 3,84 m -> 7,52 m Gesamthoehe
+  const flight2X = towerX - 2
+  const flight2Z = landingZ + 0.6
   b.stairs({
-    x: towerX - 2,
+    x: flight2X,
     y: landingY + 0.2,
-    z: landingZ + 0.6,
+    z: flight2Z,
     width: 1.8,
     steps: flight2Steps,
     color: COLORS.concrete,
     dir: 'south',
   })
+  stairDressing(b, { x: flight2X, y: landingY + 0.2, z: flight2Z, width: 1.8, steps: flight2Steps, dir: 'south' })
+
+  // Das Podest hing bis hierher frei in der Luft und war an drei Seiten offen.
+  // Vier Stuetzen tragen es sichtbar ab; die Bruestung laeuft ueber Nord- und
+  // Ostkante, die Westkante bleibt der Durchgang zum zweiten Lauf.
+  for (const sx of [-0.72, 0.72]) {
+    for (const sz of [-1.02, 1.02]) {
+      b.box({
+        x: towerX + sx,
+        y: 0,
+        z: landingZ + sz,
+        w: 0.16,
+        h: landingY,
+        d: 0.16,
+        color: COLORS.concrete,
+        collide: false,
+      })
+    }
+  }
+  const landingTop = landingY + 0.2
+  b.railing({ x: towerX, z: landingZ - 1.15, y: landingTop, length: 1.8, axis: 'x', color: COLORS.iron, collide: false })
+  b.railing({ x: towerX + 0.85, z: landingZ, y: landingTop, length: 2.4, axis: 'z', color: COLORS.iron, collide: false })
+
   const topY = landingY + 0.2 + flight2Steps * 0.16
   const topZ = landingZ + 0.6 + flight2Steps * 0.3
   // Steg vom Treppenturm auf das Dach von Block A.
-  b.box({ x: (towerX - 2 + a.x0) / 2, y: topY - 0.2, z: topZ, w: a.x0 - towerX + 3, h: 0.2, d: 2, color: COLORS.concrete })
+  const bridgeX = (flight2X + a.x0) / 2
+  const bridgeW = a.x0 - towerX + 3
+  b.box({ x: bridgeX, y: topY - 0.2, z: topZ, w: bridgeW, h: 0.2, d: 2, color: COLORS.concrete })
+  // Bruestung des Stegs. Auf der Nordseite erst oestlich des zweiten Laufs -
+  // dort steigt die Treppe unter dem Steg hindurch an.
+  const bridgeEast = bridgeX + bridgeW / 2
+  b.railing({
+    x: (towerX - 0.9 + bridgeEast) / 2,
+    z: topZ - 0.95,
+    y: topY,
+    length: bridgeEast - (towerX - 0.9),
+    axis: 'x',
+    color: COLORS.iron,
+    collide: false,
+  })
+  b.railing({ x: bridgeX, z: topZ + 0.95, y: topY, length: bridgeW, axis: 'x', color: COLORS.iron, collide: false })
 
   // Dachabstieg an der Ostseite von Block C: kurze Absaetze statt Sprung ins Nichts.
   for (let i = 0; i < 5; i++) {
