@@ -97,13 +97,25 @@ export class WorldBuilder {
     color: string
     /** Richtung, in die die Treppe ansteigt. */
     dir: 'north' | 'south' | 'east' | 'west'
+    /**
+     * Offene Stufen statt geschlossenem Keil.
+     *
+     * Standard ist der Keil: jede Stufe reicht vom Fusspunkt bis zu ihrer
+     * Trittflaeche, wie bei einer gegossenen Betontreppe. Eine Stahltreppe
+     * sieht so falsch aus - sie wird im Bild zu einer massiven Schraege ohne
+     * Struktur. Mit `open` bleibt jede Stufe eine Platte von 0,16 m, die auf
+     * den Wangen aus `stairDressing()` liegt. Die Oberkanten sind in beiden
+     * Faellen dieselben, das Begehen aendert sich also nicht.
+     */
+    open?: boolean
   }): void {
     const rise = 0.16
     const run = 0.3
     for (let i = 0; i < options.steps; i++) {
-      const h = rise * (i + 1)
+      const h = options.open ? rise : rise * (i + 1)
+      const y = options.open ? options.y + rise * i : options.y
       const offset = run * i + run / 2
-      const common = { y: options.y, h, color: options.color }
+      const common = { y, h, color: options.color }
       if (options.dir === 'north' || options.dir === 'south') {
         const sign = options.dir === 'north' ? -1 : 1
         this.box({
