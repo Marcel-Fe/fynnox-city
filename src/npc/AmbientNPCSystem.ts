@@ -54,6 +54,16 @@ interface NPCLook {
   bulk: number
   /** Umhaengetasche wie in Tavis Turnaround. */
   bag?: boolean
+  /**
+   * Kopfbedeckung und Schal - nur fuer die namenlosen Stadtbewohner.
+   *
+   * Mira, Boro und Tavi stammen aus 12_Charakter_Turnarounds und tragen dort
+   * keine; wer ihnen eine aufsetzt, erfindet an einer gesperrten Designvorgabe
+   * herum. Bei den uebrigen Figuren ist genau das der Zweck: eine Silhouette,
+   * die sich aus zwanzig Metern von der daneben unterscheidet.
+   */
+  hat?: 'cap' | 'beanie'
+  scarf?: string
 }
 
 const LOOKS: NPCLook[] = [
@@ -105,6 +115,7 @@ const LOOKS: NPCLook[] = [
     ear: 'round',
     tail: 'slim',
     bulk: 1.05,
+    hat: 'cap',
   },
   {
     fur: '#8C7F92',
@@ -116,6 +127,7 @@ const LOOKS: NPCLook[] = [
     ear: 'pointed',
     tail: 'bushy',
     bulk: 0.92,
+    scarf: '#D9705C',
   },
   {
     fur: '#C98F5A',
@@ -127,6 +139,7 @@ const LOOKS: NPCLook[] = [
     ear: 'small',
     tail: 'slim',
     bulk: 1.12,
+    hat: 'beanie',
   },
 ]
 
@@ -231,9 +244,23 @@ export class AmbientNPCSystem {
     b.add(capsule(0.18 * bulk, 0.3), look.jacket, { pos: [0, 1.06, 0], scale: [1, 1, 0.82] })
     b.add(capsule(0.13 * bulk, 0.22), look.accent, { pos: [0, 1.11, 0.05], scale: [1, 1, 0.7] })
     b.add(cylinder(0.17 * bulk, 0.17 * bulk, 0.07, 10), look.pants, { pos: [0, 0.83, 0] })
+    /**
+     * Guertel auf der Naht zwischen Jacke und Hose.
+     *
+     * Ohne ihn geht der Rumpf in einem Zug in die Beine ueber - im Bild eine
+     * Roehre mit Farbwechsel. Eine einzige waagerechte Kante an der Taille
+     * gliedert die Figur so, wie es an der Fassade das Gesimsband tut.
+     */
+    b.add(cylinder(0.178 * bulk, 0.178 * bulk, 0.055, 12), look.shoe, { pos: [0, 0.9, 0] })
+    b.add(box(0.07, 0.055, 0.03), look.accent, { pos: [0, 0.9, 0.15 * bulk] })
     // Kragen und Hals.
     b.add(cylinder(0.09, 0.12, 0.09, 10), look.jacket, { pos: [0, 1.29, 0] })
     b.add(cylinder(0.07, 0.08, 0.09, 8), look.fur, { pos: [0, 1.34, 0] })
+    if (look.scarf) {
+      b.add(cylinder(0.105, 0.115, 0.1, 10), look.scarf, { pos: [0, 1.3, 0] })
+      // Zipfel, nach vorn haengend.
+      b.add(box(0.07, 0.2, 0.035), look.scarf, { pos: [0.05, 1.19, 0.1], rot: [0.12, 0, 0.1] })
+    }
 
     // Kopf: Schaedel, Schnauze, Nase, Augen.
     const headY = 1.47
@@ -265,6 +292,17 @@ export class AmbientNPCSystem {
       }
     }
 
+    if (look.hat === 'cap') {
+      b.add(cylinder(0.152, 0.15, 0.07, 12), look.accent, { pos: [0, headY + 0.13, 0] })
+      b.add(sphere(0.15, 10, 8), look.accent, { pos: [0, headY + 0.15, 0], scale: [1, 0.5, 1] })
+      // Schirm nach vorn.
+      b.add(box(0.2, 0.025, 0.11), look.accent, { pos: [0, headY + 0.13, 0.15], rot: [-0.15, 0, 0] })
+    } else if (look.hat === 'beanie') {
+      b.add(sphere(0.165, 10, 8), look.accent, { pos: [0, headY + 0.06, 0], scale: [1, 0.85, 1] })
+      b.add(cylinder(0.168, 0.168, 0.055, 12), look.pants, { pos: [0, headY + 0.09, 0] })
+      b.add(sphere(0.04, 6, 5), look.pants, { pos: [0, headY + 0.22, 0] })
+    }
+
     // Schweif - keine eigene Gruppe, er schwingt bei Ambient-Figuren nicht.
     if (look.tail === 'bushy') {
       b.add(sphere(0.085, 8, 6), look.fur, { pos: [0, 0.82, -0.19], scale: [1, 1, 1.15] })
@@ -284,6 +322,8 @@ export class AmbientNPCSystem {
     const b = new PartBatcher()
     b.add(capsule(0.062, 0.5), look.pants, { pos: [0, -0.31, 0] })
     b.add(box(0.115, 0.085, 0.2), look.shoe, { pos: [0, -0.7, 0.03] })
+    // Sohle: die einzige Kante, an der ein Schuh als Schuh liest.
+    b.add(box(0.125, 0.03, 0.21), look.cream, { pos: [0, -0.745, 0.035] })
     b.finish(group, { castShadow: false })
   }
 
@@ -291,6 +331,8 @@ export class AmbientNPCSystem {
   private buildArm(group: THREE.Group, look: NPCLook, side: number): void {
     const b = new PartBatcher()
     b.add(capsule(0.052, 0.32), look.jacket, { pos: [0, -0.2, 0] })
+    // Aufschlag am Handgelenk - trennt Hand von Aermel, die dieselbe Farbe haben.
+    b.add(cylinder(0.058, 0.058, 0.045, 8), look.accent, { pos: [0, -0.35, 0] })
     b.add(sphere(0.058, 8, 6), look.jacket, { pos: [0, -0.4, 0], scale: [0.85, 1, 1] })
     // Bauchtasche nur rechts, wie im Turnaround von Tavi.
     if (side > 0 && look.bag) {
