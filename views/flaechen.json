@@ -1,0 +1,7 @@
+[
+  { "name": "f-gehweg-nord", "pos": [-30, 0.4, -16], "yaw": -1.5708 },
+  { "name": "f-cafe", "pos": [9, 0.4, -14], "yaw": 0 },
+  { "name": "f-laden", "pos": [38, 0.4, -14.5], "yaw": 0 },
+  { "name": "f-gehweg-sued", "pos": [22, 0.4, -8], "yaw": 1.5708 },
+  { "name": "f-strasse-ost", "pos": [-6, 0.4, -8], "yaw": -1.5708 }
+]

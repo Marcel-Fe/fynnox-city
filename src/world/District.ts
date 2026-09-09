@@ -2494,6 +2494,109 @@ function bicycle(b: WorldBuilder, x: number, z: number, rot: number): void {
 }
 
 /**
+ * Cafe-Platz: Tisch, zwei Stuehle, Sonnenschirm.
+ *
+ * Steht in der Vorzone zwischen Gehweg und Hausfront, nicht auf dem Gehweg -
+ * der ist nach Paketmass nur 2,0 m breit und muss begehbar bleiben. Nur Tisch
+ * und Schirmmast tragen Kollision; Stuehle als eigene Hindernisse haetten die
+ * Figur zwischen Tisch und Lehne haengen lassen.
+ */
+function cafeSet(b: WorldBuilder, x: number, z: number, seed: number): void {
+  const y = CURB_HEIGHT
+  const turn = drift(seed) * Math.PI
+  b.shape(cylinder(0.07, 0.07, 0.68, 8), COLORS.iron, { pos: [x, y + 0.34, z] }, { collide: true })
+  b.shape(cylinder(0.42, 0.42, 0.06, 14), COLORS.cream, { pos: [x, y + 0.71, z] }, { collide: false })
+  b.shape(cylinder(0.28, 0.3, 0.04, 10), COLORS.iron, { pos: [x, y + 0.02, z] }, { collide: false })
+  for (const side of [-1, 1]) {
+    const cx = x + Math.cos(turn) * side * 0.78
+    const cz = z + Math.sin(turn) * side * 0.78
+    b.shape(cylinder(0.2, 0.2, 0.05, 8), COLORS.wood, { pos: [cx, y + 0.44, cz] }, { collide: false })
+    for (let i = 0; i < 3; i++) {
+      const a = turn + (i - 1) * 0.7
+      b.box({
+        x: cx + Math.cos(a) * 0.16,
+        y,
+        z: cz + Math.sin(a) * 0.16,
+        w: 0.04,
+        h: 0.44,
+        d: 0.04,
+        color: COLORS.iron,
+        collide: false,
+      })
+    }
+    // Lehne, vom Tisch weg geneigt.
+    b.box({
+      x: cx - Math.cos(turn) * side * 0.18,
+      y: y + 0.49,
+      z: cz - Math.sin(turn) * side * 0.18,
+      w: 0.34,
+      h: 0.42,
+      d: 0.05,
+      color: COLORS.wood,
+      rotY: -turn,
+      collide: false,
+    })
+  }
+  // Schirm: Mast, Dach aus sechs Bahnen im Wechsel.
+  b.shape(cylinder(0.05, 0.05, 2.3, 8), COLORS.wood, { pos: [x, y + 1.15, z] }, { collide: false })
+  b.shape(cone(1.34, 0.82, 8), COLORS.wallCoral, { pos: [x, y + 2.58, z], rot: [0, turn, 0] }, { collide: false })
+  b.shape(cone(0.98, 0.6, 8), COLORS.cream, { pos: [x, y + 2.84, z], rot: [0, turn + 0.4, 0] }, { collide: false })
+}
+
+/**
+ * Warenauslage vor einem Laden: gestapelte Kisten mit Inhalt.
+ *
+ * In den Bildreferenzen steht vor jedem Laden Ware auf der Strasse - das ist
+ * der Unterschied zwischen einem Schaufenster und einem Geschaeft.
+ */
+function wareCrates(b: WorldBuilder, x: number, z: number, seed: number): void {
+  const y = CURB_HEIGHT
+  const goods = [COLORS.gold, COLORS.coral, COLORS.foliage, COLORS.bloom, COLORS.cyan]
+  let n = 0
+  for (const [dx, dz, h] of [
+    [0, 0, 0.42],
+    [0.62, 0.1, 0.32],
+    [0.16, 0.58, 0.36],
+  ] as [number, number, number][]) {
+    const cx = x + dx
+    const cz = z + dz
+    const turn = (drift(seed + n) - 0.5) * 0.7
+    b.box({ x: cx, y, z: cz, w: 0.56, h, d: 0.5, color: COLORS.wood, rotY: turn, collide: n === 0 })
+    // Inhalt: drei Ballen, die ueber den Rand schauen.
+    for (let i = 0; i < 3; i++) {
+      const a = drift(seed + n * 3 + i) * Math.PI * 2
+      b.shape(sphere(0.13, 7, 5), goods[(seed + n + i) % goods.length], {
+        pos: [cx + Math.cos(a) * 0.14, y + h + 0.06, cz + Math.sin(a) * 0.12],
+        scale: [1, 0.8, 1],
+      })
+    }
+    n += 1
+  }
+}
+
+/** Abfallkorb und Aufsteller - stehen zusammen an den Laternen. */
+function binAndSign(b: WorldBuilder, x: number, z: number, seed: number): void {
+  const y = CURB_HEIGHT
+  b.shape(cylinder(0.24, 0.2, 0.72, 10), COLORS.iron, { pos: [x, y + 0.36, z] }, { collide: true })
+  b.shape(torus(0.25, 0.03, 6, 12), COLORS.metal, { pos: [x, y + 0.72, z], rot: [Math.PI / 2, 0, 0] }, { collide: false })
+  // Klappaufsteller: zwei geneigte Tafeln, oben zusammenlaufend.
+  const turn = drift(seed) * Math.PI
+  for (const side of [-1, 1]) {
+    b.box({
+      x: x + 1.1 + Math.cos(turn) * side * 0.16,
+      y,
+      z: z + Math.sin(turn) * side * 0.16,
+      w: 0.6,
+      h: 0.92,
+      d: 0.05,
+      color: COLORS.wood,
+      rotY: -turn,
+      collide: false,
+    })
+  }
+}
+
+/**
  * Strassenmoeblierung. Die Bildreferenzen zeigen keine leeren Flaechen -
  * Laternen, Baumbeete, Markisen und Kuebel fuellen jeden Gehweg. Alles laeuft
  * ueber WorldBuilder und landet damit in den bestehenden Material-Batches;
@@ -2565,6 +2668,60 @@ function buildStreetDressing(b: WorldBuilder, sway: { scene: THREE.Scene; out: T
   bicycle(b, -9.2, -9.4, 0)
   bicycle(b, -8.2, -9.4, 0)
   bicycle(b, 12.5, 3.2, Math.PI / 2)
+
+  /**
+   * Vorzone der Hauptstrasse: der Streifen zwischen Gehwegkante (z -17) und
+   * Hausfront (z -22).
+   *
+   * Fuenf Meter breit, ueber die ganze Strassenlaenge, und bis hierher voellig
+   * leer - waehrend die Promenade nebenan schon dicht bewachsen ist. Genau
+   * dieser Streifen unterscheidet in den Bildreferenzen eine Strasse von einer
+   * Verkehrsflaeche: dort stehen Ware, Tische, Raeder und Koerbe.
+   *
+   * Der Gehweg selbst bleibt frei. Er ist nach Paketmass 2,0 m breit, und die
+   * Ambient-Route 4 laeuft mittig darauf.
+   */
+  const frontZ = -19.6
+  /**
+   * Der Einstieg der Parkourroute liegt in dieser Vorzone: die beiden Container
+   * vor Block A belegen x 4,8 bis 9,2 bei z -20,6 bis -18,2. Was dort steht,
+   * verstellt die Kletterlinie - deshalb bleibt der Streifen leer, so wie ihn
+   * `buildStreetDressing` schon fuer die Hecken freihaelt.
+   */
+  const PARKOUR_ENTRY = { x0: 4.4, x1: 9.6, z0: -21, z1: -17.8 }
+  const clearOfParkour = (x: number, z: number) =>
+    x < PARKOUR_ENTRY.x0 || x > PARKOUR_ENTRY.x1 || z < PARKOUR_ENTRY.z0 || z > PARKOUR_ENTRY.z1
+
+  // Cafe unter den Markisen von Block A und B sowie vor Block C.
+  for (const [x, seed] of [[11.4, 12], [22.6, 13], [27.4, 14], [33.4, 15]] as [number, number][]) {
+    if (clearOfParkour(x, frontZ)) cafeSet(b, x, frontZ, seed)
+  }
+  // Ware vor den Schaufenstern, in der Gasse und westlich der Garage.
+  for (const [x, seed] of [[16.5, 21], [38.2, 22], [43.4, 23], [-19.4, 24]] as [number, number][]) {
+    if (clearOfParkour(x, frontZ - 0.5)) wareCrates(b, x, frontZ - 0.5, seed)
+  }
+  // Koerbe und Aufsteller an den Laternen, auf deren Hoehe.
+  for (const [x, seed] of [[-24, 31], [-8, 32], [8, 33], [24, 34], [40, 35]] as [number, number][]) {
+    if (clearOfParkour(x, -17.9)) binAndSign(b, x, -17.9, seed)
+  }
+  // Raeder lehnen dort, wo Leute hinwollen: vor den Laeden und am Cafe.
+  for (const [x, rot] of [[15.5, 0.2], [16.3, 0.15], [20.4, -0.2], [31.2, 0.1], [31.9, 0.05]] as [number, number][]) {
+    if (clearOfParkour(x, -18.4)) bicycle(b, x, -18.4, rot)
+  }
+  // Suedseite: schmale Vorzone zum Platz hin, deshalb nur Koerbe und Kuebel.
+  for (const [x, seed] of [[-16, 41], [0, 42], [16, 43]] as [number, number][]) {
+    binAndSign(b, x, -6.6, seed)
+  }
+  for (const x of [-22, -10, 6, 22]) {
+    b.shape(cylinder(0.6, 0.66, 0.56, 12), COLORS.stoneShade, { pos: [x, CURB_HEIGHT + 0.28, -6.4] }, { collide: true })
+    for (let i = 0; i < 4; i++) {
+      const a = i * 1.6 + x * 0.4
+      b.shape(sphere(0.26, 7, 5), i % 2 ? COLORS.foliage : COLORS.bloom, {
+        pos: [x + Math.cos(a) * 0.28, CURB_HEIGHT + 0.62, -6.4 + Math.sin(a) * 0.28],
+        scale: [1, 0.78, 1],
+      })
+    }
+  }
   // Segelboote im Becken, abseits der Fahrrinnen und Liegeplaetze.
   sailBoat(b, -34, 52, 0.5)
   sailBoat(b, -46, 71, -0.3)
