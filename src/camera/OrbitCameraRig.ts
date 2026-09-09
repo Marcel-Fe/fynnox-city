@@ -56,7 +56,10 @@ export class OrbitCameraRig {
   sensitivity = 1
 
   constructor(private readonly collision: CollisionWorld) {
-    this.camera = new THREE.PerspectiveCamera(58, 1, 0.1, 400)
+    // Sichtweite 560 m: der Bergkamm der Kulisse steht bei bis zu 458 m vom
+    // Ursprung, und der Spieler kann sich noch einmal 80 m davon entfernen.
+    // Bei den alten 400 m wurde er je nach Standort abgeschnitten.
+    this.camera = new THREE.PerspectiveCamera(58, 1, 0.1, 560)
   }
 
   get activeProfile(): string {

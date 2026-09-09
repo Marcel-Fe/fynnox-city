@@ -77,7 +77,13 @@ export class SkySystem {
 
     // Nebel erst spaet einsetzen lassen: vorher lag schon das Hafenbecken darin
     // und verlor seine Farbe.
-    scene.fog = new THREE.Fog(new THREE.Color(COLORS.cream), 140, 330)
+    //
+    // Das hintere Ende richtet sich nach der Kulisse. Der Bergkamm steht seit
+    // der Tiefenstaffelung bei 366 bis 458 m; bei einem Nebelende von 330 m
+    // waere er vollstaendig in Horizontfarbe getaucht und damit gar nicht
+    // gebaut. Der Himmelsdom (Radius 320) folgt der Kamera und verdeckt nichts,
+    // er schreibt keine Tiefe.
+    scene.fog = new THREE.Fog(new THREE.Color(COLORS.cream), 150, 500)
     this.apply()
   }
 

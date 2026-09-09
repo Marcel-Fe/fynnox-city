@@ -305,7 +305,7 @@ function backdropPeak(
  * Alles ohne Kollision. Erreichbar ist davon nichts - die Kulisse beginnt
  * 10 m hinter der letzten begehbaren Flaeche.
  */
-function buildBackdropTown(b: WorldBuilder): void {
+function buildBackdropTown(b: WorldBuilder, band: { from: number; to: number }): void {
   const walls = [
     COLORS.townFarCream,
     COLORS.townFarCoral,
@@ -315,21 +315,31 @@ function buildBackdropTown(b: WorldBuilder): void {
   ]
   // Stadtboden unter der Kulisse. Ohne ihn stehen die Haeuser auf Wiese - in
   // den Bildreferenzen liegt zwischen den Blocks Pflaster, kein Gruen.
-  b.box({ x: 0, y: -1, z: -140, w: 560, h: 1.06, d: 150, color: COLORS.townFarGround, collide: false })
+  const rows = 6
+  const stepZ = (band.from - band.to) / (rows - 1)
+  b.box({
+    x: 0,
+    y: -1,
+    z: (band.from + band.to) / 2,
+    w: 620,
+    h: 1.06,
+    d: band.from - band.to + 40,
+    color: COLORS.townFarGround,
+    collide: false,
+  })
 
   const stepX = 20
-  const stepZ = 18
   let seed = 700
   for (let ix = -12; ix <= 12; ix++) {
-    for (let iz = 0; iz < 8; iz++) {
+    for (let iz = 0; iz < rows; iz++) {
       seed += 1
       // Gassen: einzelne Felder bleiben frei. Vorher blieb jedes vierte frei -
       // bei 26 m Raster und 13 m Haeusern stand die Kulisse dadurch so weit
       // auseinander, dass zwischen den Haeusern mehr Wiese lag als Stadt.
       if (drift(seed) < 0.13) continue
       const x = ix * stepX + (drift(seed + 1) - 0.5) * 5
-      const z = -82 - iz * stepZ - drift(seed + 2) * 6
-      const depth = iz / 7
+      const z = band.from - iz * stepZ - drift(seed + 2) * 6
+      const depth = iz / (rows - 1)
       const height = 7 + (1 - depth) * 3.5 + drift(seed + 3) * 9
       const w = 15 + drift(seed + 4) * 8
       const d = 13 + drift(seed + 5) * 6
@@ -403,32 +413,34 @@ function buildBackdrop(b: WorldBuilder): void {
   // Hinterland: das Gelaende endet bei z = -60. Ohne Boden dahinter klafft
   // zwischen Stadtrand und Huegelfuss ein Streifen Himmel dort, wo Land sein
   // muesste - vom Dach aus sofort zu sehen.
-  b.box({ x: 0, y: -1, z: -180, w: 660, h: 1.04, d: 250, color: COLORS.hinterland, collide: false })
-  // Als flache Ebene las das Hinterland als leere Wiese bis zum Horizont. In
-  // den Bildreferenzen liegt die Stadt an einem Hang, hinter ihr steigt das
-  // Land an. Diese breiten Kuppen sind dieser Hang - und sie bleiben flach:
-  // ein hoher Wall verdeckt vom Dach aus die gesamte Bergkette dahinter und
-  // macht aus der Staffelung wieder eine einzige gruene Wand.
-  for (let i = 0; i < 13; i++) {
-    const t = i / 12
-    backdropHill(
-      b,
-      -260 + t * 520,
-      -98 - drift(i + 240) * 20,
-      98 + drift(i + 260) * 44,
-      6 + drift(i + 280) * 5,
-      COLORS.hillNear,
-      i + 240,
-    )
+  b.box({ x: 0, y: -1, z: -230, w: 760, h: 1.04, d: 350, color: COLORS.hinterland, collide: false })
+
+  /**
+   * Die Tiefenstufen liegen hintereinander, nicht ineinander.
+   *
+   * Vorher taten sie das nicht: die Huegel standen bei z -98 und -132, die
+   * Kulissenstadt reichte von -82 bis -208. Die Huegel wuchsen also mitten
+   * durch die Haeuser, und weil eine Kuppe mit 120 m Radius auch in der Tiefe
+   * 120 m misst, schob sich die vorderste sogar bis an den Stadtrand. Im Bild
+   * sass die Stadt auf einer gruenen Wiese statt auf ihrem eigenen Boden.
+   *
+   * Die Grenzen stehen deshalb hier zusammen und werden von unten nach oben
+   * eingehalten. Wer eine Stufe verschiebt, verschiebt auch ihre Nachbarn.
+   */
+  const BAND = {
+    town: { from: -85, to: -175 },
+    woodland: { from: -196, to: -230 },
+    hills: { from: -250, to: -286 },
+    ridge: { from: -300, to: -340 },
   }
-  // Waldflecken auf dem Hinterland. Ohne sie ist es eine einfarbige Flaeche -
-  // gerade weil sie so gross ist, faellt jeder fehlende Bewuchs auf. Zwei
-  // Gruentoene im Wechsel, sonst liest der Wald als ein einziger Teppich.
+
+  buildBackdropTown(b, BAND.town)
+
+  // Waldsaum hinter der Stadt: niedrig genug, dass die Ketten dahinter sichtbar
+  // bleiben. Zwei Gruentoene im Wechsel, sonst liest der Wald als ein Teppich.
   for (let i = 0; i < 46; i++) {
-    const x = -300 + drift(i + 500) * 600
-    // Erst hinter der Kulissenstadt: naeher gesetzt wurden aus Waldflecken
-    // gruene Blasen, die groesser waren als die Haeuser davor.
-    const z = -178 - drift(i + 540) * 90
+    const x = -320 + drift(i + 500) * 640
+    const z = BAND.woodland.from - drift(i + 540) * (BAND.woodland.from - BAND.woodland.to)
     backdropHill(
       b,
       x,
@@ -439,30 +451,27 @@ function buildBackdrop(b: WorldBuilder): void {
       i + 500,
     )
   }
-  buildBackdropTown(b)
-
-  // Nordflanke: hinter der Stadt steigt das Land an. Die Kette stand zuerst bei
-  // z = -84 und damit knapp 50 m hinter dem letzten Haus - im Bild eine gruene
-  // Wand, kein Hinterland. Ferne entsteht durch Abstand, nicht durch Groesse.
+  // Huegelkette. Ferne entsteht durch Abstand, nicht durch Groesse - naeher
+  // gesetzt war dieselbe Kette eine gruene Wand hinter dem letzten Haus.
   for (let i = 0; i < 18; i++) {
     const t = i / 17
-    const x = -240 + t * 480
-    const z = -132 - drift(i) * 34
-    backdropHill(b, x, z, 54 + drift(i + 20) * 30, 24 + drift(i + 40) * 18, COLORS.hillNear, i)
+    const x = -280 + t * 560
+    const z = BAND.hills.from - drift(i) * (BAND.hills.from - BAND.hills.to)
+    backdropHill(b, x, z, 54 + drift(i + 20) * 30, 26 + drift(i + 40) * 20, COLORS.hillNear, i)
   }
   // Zweite Kette, hoeher und schon deutlich blauer.
   for (let i = 0; i < 15; i++) {
     const t = i / 14
-    const x = -290 + t * 580
-    const z = -212 - drift(i + 60) * 44
-    backdropHill(b, x, z, 74 + drift(i + 80) * 40, 42 + drift(i + 100) * 26, COLORS.hillMid, i + 60)
+    const x = -330 + t * 660
+    const z = BAND.ridge.from - drift(i + 60) * (BAND.ridge.from - BAND.ridge.to)
+    backdropHill(b, x, z, 74 + drift(i + 80) * 40, 44 + drift(i + 100) * 26, COLORS.hillMid, i + 60)
   }
   // Bergkamm ganz hinten, rund um die Bucht. Zwei versetzte Reihen statt einer:
   // bei nur einer Reihe schoben die schwankenden Abstaende Luecken auf, durch
   // die der leere Himmel bis auf die Wasserlinie durchsah.
   for (const row of [
-    { count: 34, base: 262, seed: 120, height: 36 },
-    { count: 30, base: 316, seed: 400, height: 48 },
+    { count: 36, base: 366, seed: 120, height: 44 },
+    { count: 32, base: 424, seed: 400, height: 58 },
   ]) {
     for (let i = 0; i < row.count; i++) {
       const angle = -Math.PI * 0.16 + (i / (row.count - 1)) * Math.PI * 1.32
