@@ -13,6 +13,11 @@ const check = (name, ok, detail = '') => {
 
 const browser = await chromium.launch()
 const page = await browser.newPage({ viewport: { width: 1280, height: 780 } })
+// Playwright bricht jede Aktion nach 30 s ab. Im Softwarerenderer dieser
+// Abnahme braucht ein Bild bis zu 3 s - schon ein Klick wartet danach auf ein
+// freies Zeitfenster im blockierten Hauptthread.
+page.setDefaultTimeout(180000)
+page.setDefaultNavigationTimeout(180000)
 const errors = []
 page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()) })
 page.on('pageerror', (e) => errors.push(String(e)))
