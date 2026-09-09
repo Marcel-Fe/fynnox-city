@@ -76,6 +76,9 @@ export class PlayerController {
     if (this.mantle) {
       this.updateMantle(delta)
       this.applyTransform(delta)
+      // Waehrend des Aufziehens steht die Bahngeschwindigkeit auf 0; der Aufruf
+      // haelt die Nachfuehrung an, statt sie hier stillschweigend zu ueberspringen.
+      rig.followMovement(delta, this.heading, 0, this.wish.lengthSq() > 0.01)
       return
     }
 
@@ -138,6 +141,15 @@ export class PlayerController {
     }
 
     this.applyTransform(delta)
+    // Die Kamera zieht der Laufrichtung nach. Sie bekommt die Blickrichtung der
+    // FIGUR, nicht den Stick: der Stick sagt nur "vorwaerts", die Figur zeigt,
+    // wohin das in der Welt fuehrt.
+    rig.followMovement(
+      delta,
+      this.heading,
+      Math.hypot(this.velocity.x, this.velocity.z),
+      this.wish.lengthSq() > 0.01,
+    )
     this.selectAnimation(delta)
   }
 

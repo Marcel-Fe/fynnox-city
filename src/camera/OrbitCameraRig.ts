@@ -17,6 +17,23 @@ const RESIDUAL_ROLL = 0.15
 /** Zeitkonstante der Horizontdaempfung (cam_vehicle_water) in 1/s. */
 const HORIZON_DAMPING = 1.6
 
+/**
+ * Nachfuehrung der Kamera hinter die Laufrichtung.
+ *
+ * FOLLOW_DAMPING liegt bei 1,8 1/s und damit weit unter den 12 1/s, mit denen
+ * `PlayerController.applyTransform()` die Figur dreht: die Figur steht in einer
+ * Viertelsekunde in der neuen Richtung, die Kamera braucht rund eineinhalb.
+ * FOLLOW_DELAY laesst kurze Korrekturschritte und Ausweichmanoever in Ruhe -
+ * erst wer eine halbe Sekunde durchlaeuft, will auch dorthin sehen.
+ * LOOK_HOLD haelt die Nachfuehrung an, solange der Spieler selbst schaut, und
+ * noch eine Sekunde danach.
+ */
+const FOLLOW_DAMPING = 1.8
+const FOLLOW_DELAY = 0.5
+const LOOK_HOLD = 1.0
+/** Ab dieser Bahngeschwindigkeit gilt die Bewegung als gewollt (m/s). */
+const FOLLOW_MIN_SPEED = 1.2
+
 const ON_FOOT: CameraTarget = {
   position: new THREE.Vector3(),
   distance: 5.2,
@@ -54,6 +71,26 @@ export class OrbitCameraRig {
   private initialised = false
   reducedMotion = false
   sensitivity = 1
+  /** QA-Schalter analog setDetail: die Achsenabnahme misst ohne Nachfuehrung. */
+  followEnabled = true
+  /**
+   * Anteil am yaw, den die Nachfuehrung beigesteuert hat.
+   *
+   * Das ist der Kern der Sache. Die Bewegungsrichtung stammt aus dem yaw; wuerde
+   * die Nachfuehrung ihn einfach mitdrehen, drehte sich die Laufrichtung mit -
+   * die Figur liefe im Kreis und die Kamera bekaeme sie nie zu fassen. Genau
+   * deshalb wurde die Idee 2026-08 verworfen. `getPlanarBasis()` rechnet den
+   * Beitrag wieder heraus: die Kamera schwenkt, die Laufrichtung in der Welt
+   * bleibt stehen, und die Figur laeuft geradeaus weiter.
+   *
+   * Er wird zurueckgesetzt, sobald der Stick losgelassen wird - dann ist die
+   * Kamera ohnehin hinter der Figur und beide Bezugssysteme fallen zusammen.
+   */
+  private followOffset = 0
+  /** Wie lange schon ununterbrochen gelaufen wird. */
+  private followTime = 0
+  /** Restzeit, in der die eigene Zeigereingabe die Nachfuehrung aussetzt. */
+  private lookHold = 0
 
   constructor(private readonly collision: CollisionWorld) {
     // Sichtweite 560 m: der Bergkamm der Kulisse steht bei bis zu 458 m vom
@@ -99,6 +136,9 @@ export class OrbitCameraRig {
     // Die Horizontdaempfung startet beim aktuellen Blickpunkt, sonst zieht die
     // Kamera beim Profilwechsel einmal quer durch das Bild.
     this.focusSeeded = false
+    // Ein Profilwechsel ist ein Schnitt: Ein- und Aussteigen setzen den yaw neu,
+    // ein stehengebliebener Nachfuehr-Anteil verdrehte danach die Laufrichtung.
+    this.resetFollow()
     let seconds = fallbackSeconds
     const range = this.profile?.blend_seconds_range
     if (range) seconds = (range[0] + range[1]) / 2
@@ -112,7 +152,20 @@ export class OrbitCameraRig {
     this.targetDistance = distance
   }
 
+  /**
+   * Setzt Nachfuehrung und Bewegungsbasis zurueck. Noetig ueberall dort, wo der
+   * yaw springt statt zu drehen - Teleport, Profilwechsel, QA-Schalter. Ohne
+   * das bliebe ein alter Offset stehen und die Laufrichtung waere gegen das
+   * Bild verdreht.
+   */
+  resetFollow(): void {
+    this.followOffset = 0
+    this.followTime = 0
+    this.lookHold = 0
+  }
+
   addLook(deltaX: number, deltaY: number): void {
+    if (deltaX !== 0 || deltaY !== 0) this.lookHold = LOOK_HOLD
     this.yaw -= deltaX * 0.0045 * this.sensitivity
     this.pitch = THREE.MathUtils.clamp(
       this.pitch + deltaY * 0.003 * this.sensitivity,
@@ -121,13 +174,65 @@ export class OrbitCameraRig {
     )
   }
 
-  /** Richtung, in die die Kamera schaut - Basis der Bewegungsrichtung. */
+  /**
+   * Richtung, in die die Kamera schaut - Basis der Bewegungsrichtung.
+   *
+   * Ohne den Nachfuehr-Anteil: siehe `followOffset`. Steht der Spieler oder
+   * schaut er selbst, ist der Anteil 0 und die Basis ist der reine Blickwinkel
+   * wie bisher.
+   */
   getPlanarBasis(forward: THREE.Vector3, right: THREE.Vector3): void {
-    forward.set(-Math.sin(this.yaw), 0, -Math.cos(this.yaw)).normalize()
+    const basisYaw = this.yaw - this.followOffset
+    forward.set(-Math.sin(basisYaw), 0, -Math.cos(basisYaw)).normalize()
     // Rechts ist forward x up, also (-f.z, 0, f.x). Mit vertauschten Vorzeichen
     // zeigt der Vektor nach links, und die Basis wird linkshaendig: A und D
     // laufen dann vertauscht, und jede Diagonale spiegelt mit.
     right.set(-forward.z, 0, forward.x).normalize()
+  }
+
+  /**
+   * Zieht die Kamera gedaempft hinter die Laufrichtung.
+   *
+   * `heading` ist die Blickrichtung der Figur (Figurenachse +Z). Hinter ihr zu
+   * stehen heisst, dass die Kamera in dieselbe Richtung sieht: der Blick der
+   * Kamera zeigt bei yaw phi nach (-sin phi, -cos phi), die Figur nach
+   * (sin h, cos h) - der Zielwinkel ist also h + PI.
+   *
+   * Wird je Bild vom PlayerController gerufen, auch im Stand: nur so faellt der
+   * Offset zurueck, sobald der Stick losgelassen wird.
+   */
+  followMovement(delta: number, heading: number, speed: number, steering: boolean): void {
+    this.lookHold = Math.max(0, this.lookHold - delta)
+    if (!this.followEnabled || !steering) {
+      // Zurueckgesetzt wird am STICK, nicht am Tempo.
+      //
+      // Der Rueckfall auf `followOffset = 0` verschiebt die Bewegungsbasis um
+      // den ganzen bisher nachgefuehrten Winkel. Solange der Stick neutral ist,
+      // geht das ins Leere - es bewegt sich nichts, was verdreht werden koennte.
+      // Haengt er dagegen am Tempo, reicht ein Bordstein oder eine Hausecke:
+      // die Figur wird kurz gebremst, die Basis springt mitten im Lauf um, und
+      // die Figur dreht mit der Kamera ab. Genau dieser Kreis war 2026-08 der
+      // Grund, die Nachfuehrung zu verwerfen - gemessen als Bahn, die statt
+      // 10 m geradeaus 3,3 m seitlich weglief.
+      this.followTime = 0
+      this.followOffset = 0
+      return
+    }
+    // Gebremst wird nur die Uhr, nie der Offset: wer vor einer Wand steht,
+    // soll die Kamera nicht weiterdrehen, aber auch die Basis nicht verlieren.
+    if (speed < FOLLOW_MIN_SPEED) return
+    this.followTime += delta
+    if (this.followTime < FOLLOW_DELAY || this.lookHold > 0 || this.reducedMotion) return
+
+    let diff = heading + Math.PI - this.yaw
+    while (diff > Math.PI) diff -= Math.PI * 2
+    while (diff < -Math.PI) diff += Math.PI * 2
+    // Erst nach dem Verzoegerungsfenster einblenden, sonst setzt die Drehung
+    // mit voller Rate ein und liest sich als Ruck.
+    const ease = Math.min(1, (this.followTime - FOLLOW_DELAY) / 0.35)
+    const step = diff * Math.min(1, delta * FOLLOW_DAMPING * ease)
+    this.yaw += step
+    this.followOffset += step
   }
 
   update(delta: number, target: THREE.Vector3, height = ON_FOOT.height): void {

@@ -52,9 +52,18 @@ async function untilFrames(predicate, batches = 60, batch = 6) {
   return last
 }
 const stick = (x, y) => page.evaluate(([x, y]) => window.fynnoxQa.setStick(x, y), [x, y])
+/** Winkel auf -PI..PI zurueckfalten - Differenzen sonst um eine volle Drehung daneben. */
+const norm = (a) => Math.atan2(Math.sin(a), Math.cos(a))
 
 for (let i = 0; i < 5; i++) { await page.click('#onboarding-next'); await wait(90) }
 await frames(8)
+
+// Die Achsenpruefungen messen 22 Bilder lang gegen einen festen Kamerawinkel.
+// Die Kameranachfuehrung setzt nach 0,5 s ein und liegt damit mitten in diesem
+// Fenster - sie wird deshalb hier abgeschaltet und in Abschnitt 7 einzeln
+// nachgewiesen. Die Schwellwerte der Achsenpruefungen bleiben unangetastet:
+// sie haben 2026-08 drei echte Vorzeichenfehler gefunden.
+await page.evaluate(() => window.fynnoxQa.setCameraFollow(false))
 
 /**
  * Kamerayaw 0 stellt die Kamera auf +Z hinter den Spieler; sie blickt nach -Z.
@@ -101,6 +110,55 @@ check('Diagonale vorne-rechts spiegelt nicht',
   diagonal.dx > 0.8 && diagonal.dz < -0.8,
   `dx=${diagonal.dx.toFixed(2)} dz=${diagonal.dz.toFixed(2)}`)
 
+// --- 1b. Die Kamera fuehrt der Laufrichtung nach -------------------------
+// Gemeldet am 09.09.2026, zum zweiten Mal: "Ich sehe nicht, wo ich hinlaufe.
+// Wenn ich mich umdrehe, sehe ich nicht, was vor mir ist." Gemessen war der
+// Winkel zwischen Blickrichtung und Laufrichtung ueber 36 Bilder konstant 180
+// Grad - die Kamera stand still, egal wie weit die Figur lief.
+//
+// Die zweite Pruefung ist die wichtigere: 2026-08 wurde eine Nachfuehrung mit
+// der Begruendung verworfen, sie drehe die Figur mit. Das stimmt fuer eine
+// Nachfuehrung, die den yaw einfach mitzieht - die Bewegungsrichtung haengt am
+// yaw, die Figur liefe im Kreis. Der Rig rechnet den Nachfuehr-Anteil aus der
+// Bewegungsbasis heraus; die Bahn muss deshalb gerade bleiben.
+await page.evaluate(([p]) => {
+  window.fynnoxQa.setStick(0, 0)
+  window.fynnoxQa.setCameraFollow(true)
+  window.fynnoxQa.teleport(p[0], p[1], p[2], 0)
+  window.fynnoxQa.setCameraYaw(0)
+}, [FREE_SPOT])
+await frames(10)
+const followStart = await state()
+await stick(0, -1)
+// 8 Bilder sind 0,4 s Spielzeit und liegen damit vor der Verzoegerung von 0,5 s.
+await frames(8)
+const followEarly = await state()
+await frames(46)
+const followEnd = await state()
+await stick(0, 0)
+
+check('Kurze Schritte drehen die Kamera nicht',
+  Math.abs(norm(followEarly.cameraYaw - followStart.cameraYaw)) < 0.15,
+  `Yaw ${followStart.cameraYaw.toFixed(2)} -> ${followEarly.cameraYaw.toFixed(2)}`)
+
+const runDx = followEnd.player[0] - followStart.player[0]
+const runDz = followEnd.player[2] - followStart.player[2]
+// Blickrichtung der Kamera bei yaw phi ist (-sin phi, -cos phi).
+const view = [-Math.sin(followEnd.cameraYaw), -Math.cos(followEnd.cameraYaw)]
+const runLen = Math.hypot(runDx, runDz)
+const cos = (view[0] * runDx + view[1] * runDz) / Math.max(runLen, 1e-6)
+const viewToRun = Math.acos(Math.max(-1, Math.min(1, cos)))
+check('Kamera schwenkt hinter die Laufrichtung', runLen > 6 && viewToRun < 0.8,
+  `${(viewToRun * 180 / Math.PI).toFixed(0)} Grad Rest bei ${runLen.toFixed(1)} m Strecke`)
+
+check('Nachfuehrung dreht die Laufrichtung nicht mit',
+  runDz > 6 && Math.abs(runDx) < 1.0,
+  `dx=${runDx.toFixed(2)} dz=${runDz.toFixed(2)}`)
+
+// Ab hier wird gefahren und eingestiegen: dort misst die Suite Fahrzeugachsen,
+// und die Nachfuehrung gehoert der Figur zu Fuss.
+await page.evaluate(() => window.fynnoxQa.setCameraFollow(false))
+
 // --- 2. Fynnox sitzt vorwaerts im Fahrzeug -------------------------------
 // Das Auto steht auf der Hauptstrasse und zeigt nach Osten: dort hat es 40 m
 // freie Bahn. Nach Norden gerichtet faehrt es nach wenigen Metern gegen den
@@ -119,7 +177,6 @@ await page.evaluate(() => window.fynnoxQa.press('enterExit'))
 const seated = await untilFrames((s) => s.boarding === 'seated', 60, 6)
 check('Eingestiegen', seated.boarding === 'seated', `${seated.boarding}/${seated.boardingState}`)
 
-const norm = (a) => Math.atan2(Math.sin(a), Math.cos(a))
 const facing = Math.abs(norm(seated.playerHeading - seated.activeVehicleHeading))
 // Figurenachse +Z gegen Fahrzeugachse -Z: eine halbe Drehung ist richtig, 0 hiesse
 // Fynnox schaut nach hinten.

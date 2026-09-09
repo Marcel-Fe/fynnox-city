@@ -258,6 +258,17 @@ export class Game {
       addLook: (x: number, y: number) => this.rig.addLook(x, y),
       setCameraYaw: (yaw: number) => {
         this.rig.yaw = yaw
+        this.rig.resetFollow()
+      },
+      /**
+       * Spiegelt keine Spielereinstellung, sondern schaltet die Nachfuehrung ab.
+       * Die vier Richtungspruefungen in `controls.mjs` messen 22 Bilder lang die
+       * Strecke gegen einen festen Kamerawinkel - sie sollen den Vorzeichenfehler
+       * finden, den sie 2026-08 gefunden haben, nicht die Nachfuehrung.
+       */
+      setCameraFollow: (enabled: boolean) => {
+        this.rig.followEnabled = enabled
+        this.rig.resetFollow()
       },
       // Spiegelt den Schalter "Hohe Detailstufe" aus dem Pausemenue. Noetig,
       // weil Headless-Chromium wenige Kerne meldet und die Automatik deshalb

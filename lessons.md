@@ -72,3 +72,49 @@ gelesen, wenn man die Stelle ohnehin schon gefunden hat.
 Aenderung erst der *Verdaechtige*, nicht die Ursache. Fuenf Minuten Messung
 (mit und ohne) haetten hier eine halbe Stunde Suche in der falschen Richtung
 gespart.
+
+## 2026-09-09 — Eine verworfene Idee war nur falsch begruendet
+
+**Meldung (zum zweiten Mal, erstmals 19.08.):** "Ich sehe nicht, wo ich
+hinlaufe. Wenn ich mich umdrehe, sehe ich nicht, was vor mir ist."
+
+**Was 2026-08 passierte:** Die Ursache wurde in der Zeigersteuerung gesucht und
+mit Pointer Lock beantwortet. Eine nachfuehrende Kamera wurde ausdruecklich
+verworfen — mit der Begruendung, sie koenne bei kamerarelativer Steuerung nicht
+funktionieren, weil das Nachfuehren die Figur mitdreht.
+
+**Warum das nur halb stimmte:** Die Begruendung ist fuer die naive Fassung
+richtig. Die Bewegungsrichtung stammt aus dem Kamerayaw; dreht die Nachfuehrung
+den yaw, dreht sich die Laufrichtung mit, das Ziel wandert genauso schnell mit,
+und die Figur laeuft im Kreis. Gerechnet: laeuft man rueckwaerts, ist der
+Zielwinkel immer genau eine halbe Drehung entfernt — die Kamera holt nie auf.
+
+Die Loesung liegt nicht in einer schwaecheren Daempfung, sondern in einer
+zweiten Groesse: `OrbitCameraRig.followOffset` haelt fest, wie viel vom yaw die
+Nachfuehrung beigesteuert hat, und `getPlanarBasis()` rechnet ihn wieder heraus.
+Die Kamera schwenkt, die Laufrichtung in der Welt bleibt stehen, die Figur laeuft
+geradeaus weiter. Der Kreis ist damit aufgetrennt, nicht gedaempft.
+
+**Der Fehler beim ersten Versuch:** Der Offset wurde zurueckgesetzt, sobald die
+GESCHWINDIGKEIT unter die Schwelle fiel. Ein Bordstein reicht dafuer. Mitten im
+Lauf sprang die Bewegungsbasis um den bereits nachgefuehrten Winkel, und die
+Figur lief seitlich weg — 3,3 m quer statt 10 m geradeaus, gemessen von der
+neuen Pruefung "Nachfuehrung dreht die Laufrichtung nicht mit". Der Rueckfall
+gehoert an den STICK: solange nichts gedrueckt ist, gibt es keine Richtung, die
+verdreht werden koennte.
+
+**Lektion:** Eine verworfene Idee traegt ihre Begruendung mit. Steht dieselbe
+Meldung ein zweites Mal da, ist zuerst die BEGRUENDUNG zu pruefen, nicht die
+Idee — hier galt sie nur fuer die eine Fassung, an die damals gedacht wurde.
+
+**Zweite Lektion:** Eine Zustandsgroesse, die eine Rueckkopplung auftrennt, darf
+nur an der Stelle zurueckgesetzt werden, an der ihr Sprung folgenlos ist. Wo sie
+zurueckgesetzt wird, ist genauso wichtig wie, wie stark sie wirkt.
+
+**Dritte Lektion, aus derselben Sitzung:** Die neue Pruefung stand zuerst am
+ENDE von `controls.mjs` — und dort sitzt Fynnox seit Abschnitt 2 im Auto. Sie
+mass also das Fahrzeug statt die Figur zu Fuss und meldete einen Fehler, den es
+im Code nicht gab. Zwei Laeufe lieferten bis auf die letzte Stelle dieselben
+Zahlen; genau das war der Hinweis, dass nicht die Aenderung dazwischen wirkte,
+sondern der Zustand davor. Eine Suite ohne Ruecksetzpunkte ist eine Kette:
+wer hinten anhaengt, erbt alles, was vorne passiert ist.
