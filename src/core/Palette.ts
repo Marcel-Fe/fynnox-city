@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import { tokens } from '../contracts/manifests'
+import { SURFACE_LAYER_COUNT, layerIndex, surfaceUniforms, type SurfaceLayerId } from './SurfaceTextures'
 
 /**
  * "Graphic Adventure 3D": klare Farbflaechen, weiche PBR-Materialien mit
@@ -293,6 +294,77 @@ const SURFACE_CHUNK = /* glsl */ `
   }
 `
 
+/**
+ * Struktur aus dem Texturarray, vor der Variation auf die Grundfarbe gelegt.
+ *
+ * Projiziert wird entlang der Achse, in die die Flaeche zeigt - die
+ * verschmolzene Stadtgeometrie hat keine brauchbaren UVs (siehe Kommentar am
+ * Rauschen), die Position dagegen ist in Metern und damit massstabstreu. Eine
+ * volle Triplanar-Mischung kostete drei Abtastungen je Pixel; fuer eine Stadt
+ * aus achsparallelen Kisten reicht die eine, in deren Richtung die Flaeche
+ * schaut. Die Zwischenwerte liegen ausserhalb des Blocks, weil das Relief sie
+ * weiter unten noch einmal braucht.
+ */
+const SURFACE_TEXTURE_DECL = /* glsl */ `
+  #ifdef FYNNOX_SURFACES
+  precision highp sampler2DArray;
+  uniform sampler2DArray uSurfaceDetail;
+  uniform sampler2DArray uSurfaceNormal;
+  uniform vec3 uSurfaceLayer[ ${SURFACE_LAYER_COUNT} ];
+  uniform float uSurfaceReady;
+  varying float vFynnoxLayer;
+  varying vec3 vFynnoxNormal;
+  #endif
+`
+
+const SURFACE_TEXTURE_CHUNK = /* glsl */ `
+  #ifdef FYNNOX_SURFACES
+  int surfaceLayer = int( vFynnoxLayer + 0.5 ) - 1;
+  bool surfaceOn = surfaceLayer >= 0 && uSurfaceReady > 0.5;
+  vec3 surfaceAxis = abs( vFynnoxNormal );
+  vec2 surfaceUv = vec2( 0.0 );
+  vec3 surfaceT = vec3( 1.0, 0.0, 0.0 );
+  vec3 surfaceB = vec3( 0.0, 1.0, 0.0 );
+  vec3 surfaceParams = vec3( 1.0 );
+  if ( surfaceOn ) {
+    surfaceParams = uSurfaceLayer[ surfaceLayer ];
+    if ( surfaceAxis.y >= surfaceAxis.x && surfaceAxis.y >= surfaceAxis.z ) {
+      surfaceUv = vFynnoxSurface.xz;
+      surfaceT = vec3( 1.0, 0.0, 0.0 );
+      surfaceB = vec3( 0.0, 0.0, -1.0 );
+    } else if ( surfaceAxis.x >= surfaceAxis.z ) {
+      surfaceUv = vFynnoxSurface.zy;
+      surfaceT = vec3( 0.0, 0.0, -sign( vFynnoxNormal.x ) );
+    } else {
+      surfaceUv = vFynnoxSurface.xy;
+      surfaceT = vec3( sign( vFynnoxNormal.z ), 0.0, 0.0 );
+    }
+    surfaceUv /= surfaceParams.x;
+    float detail = texture( uSurfaceDetail, vec3( surfaceUv, float( surfaceLayer ) ) ).r * 2.0;
+    diffuseColor.rgb = clamp( diffuseColor.rgb * mix( 1.0, detail, surfaceParams.y ), 0.0, 1.0 );
+  }
+  #endif
+`
+
+/**
+ * Relief aus der Normalenkarte.
+ *
+ * Gerechnet in Weltachsen und mit der Blickmatrix in den Sichtraum gedreht.
+ * Das stimmt nur fuer Geometrie ohne eigene Modellmatrix - und genau die traegt
+ * Layer: die verschmolzenen Stadtkacheln liegen fest im Weltraum. Instanzen
+ * (Fenster, Baeume) tragen Layer 0 und kommen hier nicht vorbei.
+ */
+const SURFACE_NORMAL_CHUNK = /* glsl */ `
+  #ifdef FYNNOX_SURFACES
+  if ( surfaceOn && surfaceParams.z > 0.0 ) {
+    vec2 bump = texture( uSurfaceNormal, vec3( surfaceUv, float( surfaceLayer ) ) ).xy * 2.0 - 1.0;
+    vec3 base = normalize( vFynnoxNormal );
+    vec3 worldNormal = normalize( base + ( surfaceT * bump.x + surfaceB * bump.y ) * surfaceParams.z );
+    normal = normalize( mat3( viewMatrix ) * worldNormal );
+  }
+  #endif
+`
+
 const TOON_CHUNK = /* glsl */ `
   float fynnoxToon( float x ) {
     float s = x * 4.0;
@@ -368,22 +440,45 @@ function injectOnce(source: string, anchor: string, replacement: string): string
  * die Stadtkacheln tragen ihre Farbe aber im Vertex, und davor gerechnet haette
  * die Saettigungsvariation auf Weiss gearbeitet.
  */
-export function applyLookPatch(material: THREE.Material): void {
+export function applyLookPatch(material: THREE.Material, options: { surfaces?: boolean } = {}): void {
+  if (options.surfaces) {
+    const withDefines = material as THREE.Material & { defines?: Record<string, string> }
+    withDefines.defines = { ...withDefines.defines, FYNNOX_SURFACES: '' }
+  }
   material.onBeforeCompile = (shader) => {
     for (const [name, uniform] of Object.entries(lookUniforms)) {
       shader.uniforms[name] = uniform as THREE.IUniform
+    }
+    if (options.surfaces) {
+      for (const [name, uniform] of Object.entries(surfaceUniforms)) {
+        shader.uniforms[name] = uniform as THREE.IUniform
+      }
     }
     // Objektraum-Position als Varying. Sie kommt aus `transformed`, also vor
     // der Modellmatrix - nur so klebt das Muster am bewegten Objekt, statt
     // beim Fahren durch den Rumpf zu wandern.
     shader.vertexShader = injectOnce(
       injectOnce(
-        shader.vertexShader,
-        'void main() {',
-        'varying vec3 vFynnoxSurface;\nvoid main() {',
+        injectOnce(
+          shader.vertexShader,
+          'void main() {',
+          `varying vec3 vFynnoxSurface;
+#ifdef FYNNOX_SURFACES
+attribute float fynnoxLayer;
+varying float vFynnoxLayer;
+varying vec3 vFynnoxNormal;
+#endif
+void main() {`,
+        ),
+        '#include <begin_vertex>',
+        '#include <begin_vertex>\n\tvFynnoxSurface = transformed;',
       ),
-      '#include <begin_vertex>',
-      '#include <begin_vertex>\n\tvFynnoxSurface = transformed;',
+      '#include <beginnormal_vertex>',
+      `#include <beginnormal_vertex>
+#ifdef FYNNOX_SURFACES
+\tvFynnoxLayer = fynnoxLayer;
+\tvFynnoxNormal = objectNormal;
+#endif`,
     )
     shader.fragmentShader = injectOnce(
       injectOnce(
@@ -391,6 +486,7 @@ export function applyLookPatch(material: THREE.Material): void {
           shader.fragmentShader,
           'void main() {',
           `varying vec3 vFynnoxSurface;
+${SURFACE_TEXTURE_DECL}
 uniform vec3 uRimColor;
 uniform float uRimStrength;
 uniform float uToonMix;
@@ -405,17 +501,62 @@ ${TOON_CHUNK}
 void main() {`,
         ),
         '#include <color_fragment>',
-        `#include <color_fragment>\n${SURFACE_CHUNK}`,
+        `#include <color_fragment>\n${SURFACE_TEXTURE_CHUNK}\n${SURFACE_CHUNK}`,
       ),
       '#include <opaque_fragment>',
       `${TOON_OUTPUT}\n#include <opaque_fragment>`,
+    )
+    shader.fragmentShader = injectOnce(
+      shader.fragmentShader,
+      '#include <normal_fragment_maps>',
+      `#include <normal_fragment_maps>\n${SURFACE_NORMAL_CHUNK}`,
     )
   }
   // Alle Materialien teilen denselben Patch, also auch dasselbe Programm -
   // sonst kompilierte Three fuer jede Farbe einen eigenen Shader. Three haengt
   // Materialtyp und Texturbelegung von sich aus an den Schluessel an, die
   // texturierte Figur bekommt deshalb trotzdem ihr eigenes Programm.
-  material.customProgramCacheKey = () => 'fynnox-toon-rim'
+  const key = options.surfaces ? 'fynnox-toon-rim-surfaces' : 'fynnox-toon-rim'
+  material.customProgramCacheKey = () => key
+}
+
+/**
+ * Textur je Palettenfarbe. Nachgeschlagen ueber den Farbwert wie `SURFACE` -
+ * der `WorldBuilder` kennt nur Farben. Was fehlt, bleibt reine Farbe: Glas,
+ * Metall, Laub und die kleinen Akzentfarben tragen keine Struktur, die man auf
+ * Spielentfernung sehen koennte.
+ */
+const LAYER_OF: Partial<Record<MaterialKey, SurfaceLayerId>> = {
+  asphalt: 'asphalt',
+  paving: 'flagstone',
+  pavingJoint: 'flagstone',
+  townFarGround: 'flagstone',
+  concrete: 'slab',
+  skateConcrete: 'slab',
+  wallCream: 'plaster',
+  wallCoral: 'plaster',
+  groundTeal: 'plaster',
+  townFarBlue: 'plaster',
+  townFarCream: 'plaster',
+  townFarCoral: 'plaster',
+  townFarTeal: 'plaster',
+  stone: 'ashlar',
+  stoneShade: 'brick',
+  roof: 'roof',
+  townFarRoof: 'roof',
+  wood: 'wood',
+  lawn: 'grass',
+  lawnStripe: 'grass',
+  hinterland: 'grass',
+  rock: 'rock',
+  mountainFar: 'rock',
+}
+
+/** Layernummer fuer den Vertex, 0 = keine Textur. */
+export function surfaceLayerOf(color: string): number {
+  const name = KEY_BY_HEX.get(color)
+  const layer = name && LAYER_OF[name]
+  return layer ? layerIndex(layer) : 0
 }
 
 /**
@@ -497,7 +638,10 @@ export function mat(key: MaterialKey | string, options?: { transparent?: number 
       transparent: (options?.transparent ?? 1) < 1,
       opacity: options?.transparent ?? 1,
     })
-    applyLookPatch(material)
+    // Einzelmeshes ohne `fynnoxLayer` (Fahrzeuge, Stationen, Tor) lesen den
+    // Standardwert 0 und bleiben reine Farbe - bewegte Teile duerfen keine
+    // Weltraumtextur tragen, sie liefe beim Fahren durch den Rumpf.
+    applyLookPatch(material, { surfaces: true })
     cache.set(id, material)
     worldMaterials.push(material)
   }
@@ -534,7 +678,7 @@ export function vertexColorMat(color: string): THREE.MeshStandardMaterial {
       metalness,
       envMapIntensity: ENV_INTENSITY,
     })
-    applyLookPatch(material)
+    applyLookPatch(material, { surfaces: true })
     vertexCache.set(id, material)
   }
   return material

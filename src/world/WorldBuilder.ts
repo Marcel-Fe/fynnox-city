@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
-import { mat, surfaceKey, vertexColorMat } from '../core/Palette'
+import { mat, surfaceKey, surfaceLayerOf, vertexColorMat } from '../core/Palette'
 import type { CollisionWorld } from '../core/CollisionWorld'
 
 export interface BoxOptions {
@@ -166,9 +166,9 @@ export class WorldBuilder {
       else this.batches.set(key, { color, parts: [geometry] })
       return
     }
-    paint(geometry, color)
     geometry.computeBoundingBox()
     ;(geometry.boundingBox ?? scratchBox).getCenter(scratchCenter)
+    paint(geometry, color, surfaceLayerOf(color))
     const size = this.detail === 'far' ? farChunkSize(scratchCenter.x, scratchCenter.z) : NEAR_CHUNK
     const chunk = `${size}:${chunkKey(scratchCenter.x, scratchCenter.z, size)}`
     const surface = surfaceKey(color)
@@ -306,6 +306,13 @@ export class WorldBuilder {
       if (!merged) {
         throw new Error(`Batch ${color} liess sich nicht verschmelzen`)
       }
+      // Auch das Hafenviertel traegt Texturen. Sein Mesh hat genau eine Farbe,
+      // der Layer ist also ueberall derselbe - dieselbe Vertexspur wie in der
+      // grossen Stadt, damit beide Teile einen Shader teilen.
+      merged.setAttribute(
+        'fynnoxLayer',
+        new THREE.BufferAttribute(new Float32Array(merged.getAttribute('position').count).fill(surfaceLayerOf(color)), 1),
+      )
       const mesh = new THREE.Mesh(merged, mat(color))
       mesh.castShadow = true
       mesh.receiveShadow = true
@@ -410,8 +417,12 @@ function chunkKey(x: number, z: number, size: number): string {
   return `${Math.floor(x / size)},${Math.floor(z / size)}`
 }
 
-/** Schreibt die Farbe als Vertexattribut - linear, so wie Three sie rechnet. */
-function paint(geometry: THREE.BufferGeometry, color: string): void {
+/**
+ * Schreibt Farbe und Texturlayer als Vertexattribute - die Farbe linear, so
+ * wie Three sie rechnet. Beide gehoeren an jede Geometrie eines Buendels:
+ * `mergeGeometries` verweigert Teile mit abweichenden Attributen.
+ */
+function paint(geometry: THREE.BufferGeometry, color: string, layer = 0): void {
   const c = new THREE.Color(color)
   const count = geometry.getAttribute('position').count
   const data = new Float32Array(count * 3)
@@ -421,6 +432,7 @@ function paint(geometry: THREE.BufferGeometry, color: string): void {
     data[i * 3 + 2] = c.b
   }
   geometry.setAttribute('color', new THREE.BufferAttribute(data, 3))
+  geometry.setAttribute('fynnoxLayer', new THREE.BufferAttribute(new Float32Array(count).fill(layer), 1))
 }
 
 const modelCache = new Map<string, Map<string, { geometry: THREE.BufferGeometry; material: THREE.Material }>>()

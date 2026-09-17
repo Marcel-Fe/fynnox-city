@@ -198,3 +198,25 @@ Shaderkosten unbrauchbar. GPU-Messung: Chromium mit `headless: false` und
 **Offen aus der Liste oben:** Punkt 2 (`ENV_INTENSITY` gegen `uSpecular`) und 3
 (Rauheit) ergaben in den Aufnahmen keinen sichtbaren Fehler und bleiben
 unveraendert.
+
+---
+
+# Nachtrag 17.09.2026 (Nachmittag) — Optik-Offensive, Luecke 1 Texturen
+
+**Gebaut:** 10 CC0-Layer (ambientCG) in einem Texturarray, `src/core/surfaceLayers.json`
+ist die einzige Liste (Werkzeug `tools/pack-textures.mjs` und Laufzeit lesen sie).
+Layer steht als `fynnoxLayer` im Vertex; Projektion entlang der Flaechenachse,
+Helligkeitsstruktur tönt die Palettenfarbe, Normalenkarte gibt Relief.
+Instanzen (Fenster, Baeume, Baenke) tragen noch Layer 0.
+
+**Gemessen** (Intel HD 0x0A16, sichtbares Chromium D3D11, 3 x 5 s):
+Texturen an 13,3–15,1 fps, aus 14,2–15,4 fps; Draw-Calls/Dreiecke unveraendert.
+
+**Offener Befund:** Die grosse Stadt laeuft auch OHNE Texturen nur mit ~15 fps
+(vor dem Stadtumbau 23–25). Vor teuren Effekten (Reflektor) zuerst diese
+Regression angehen.
+
+**Nutzerwuensche nach der Teststrasse:** Cafe-Moeblierung mit sitzenden Figuren
+(belebte Stadt), Unterwasserwelt beim Tauchen, schoenere NPC-Figuren.
+
+**Suiten auf GPU:** `FYNNOX_GPU=1 sh run-suite.sh acceptance.mjs` (78 s statt Stunden).

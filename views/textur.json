@@ -1,0 +1,6 @@
+[
+  { "name": "textur-strasse", "pos": [0, 10.4, -250], "yaw": 0.4 },
+  { "name": "textur-fassade", "pos": [40, 10.4, -120], "yaw": 0 },
+  { "name": "textur-kreuzung", "pos": [-60, 10.4, -180], "yaw": -0.8, "pitch": -0.15 },
+  { "name": "textur-grenze", "pos": [120, 10.4, -200], "yaw": -1.5708 }
+]

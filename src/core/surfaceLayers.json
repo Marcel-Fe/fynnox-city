@@ -1,0 +1,12 @@
+[
+  { "id": "asphalt", "asset": "Asphalt031", "scale": 4, "contrast": 1.6, "bump": 0.35 },
+  { "id": "flagstone", "asset": "Tiles143", "scale": 3, "contrast": 0.65, "bump": 0.6 },
+  { "id": "slab", "asset": "PavingStones136", "scale": 2.4, "contrast": 0.7, "bump": 0.6 },
+  { "id": "plaster", "asset": "Plaster001", "scale": 1.6, "contrast": 0.55, "bump": 0.4 },
+  { "id": "ashlar", "asset": "Tiles144", "scale": 2.5, "contrast": 0.7, "bump": 0.6 },
+  { "id": "brick", "asset": "Bricks097", "scale": 1.2, "contrast": 0.8, "bump": 0.8 },
+  { "id": "roof", "asset": "RoofingTiles014A", "scale": 3, "contrast": 0.9, "bump": 0.7 },
+  { "id": "wood", "asset": "Planks037A", "scale": 2, "contrast": 0.8, "bump": 0.6 },
+  { "id": "grass", "asset": "Grass004", "scale": 3, "contrast": 0.8, "bump": 0.3 },
+  { "id": "rock", "asset": "Rock026", "scale": 12, "contrast": 0.9, "bump": 0.8 }
+]

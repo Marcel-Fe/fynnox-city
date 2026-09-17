@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import { COLORS, mat, setLookDetail } from './Palette'
+import { loadSurfaceTextures, surfaceUniforms } from './SurfaceTextures'
 import { CollisionWorld, type Collider } from './CollisionWorld'
 import { PostFx } from './PostFx'
 import { buildDistrict, type DistrictAnchors } from '../world/District'
@@ -85,6 +86,8 @@ export class Game {
   private scannerActive = false
   private autosaveTimer = 0
   private frameCount = 0
+  /** 'pending', 'loaded' oder der Grund, warum die Stadt einfarbig bleibt. */
+  private surfaces = 'pending'
 
   constructor(
     private readonly container: HTMLElement,
@@ -110,6 +113,10 @@ export class Game {
     this.input = new InputManager(this.renderer.domElement)
     this.rig = new OrbitCameraRig(this.collision)
     this.sky = new SkySystem(this.scene, this.renderer)
+    // Nicht abgewartet: bis die Texturen da sind, steht die Stadt in reinen Farben.
+    void loadSurfaceTextures(this.renderer).then((problem) => {
+      this.surfaces = problem ?? 'loaded'
+    })
     this.anchors = buildDistrict(this.scene, this.collision)
     this.lod = new ChunkLod(this.anchors.nearChunks)
     this.water = new Water(this.scene)
@@ -290,6 +297,10 @@ export class Game {
       setShadows: (enabled: boolean) => {
         this.sky.sun.castShadow = enabled
       },
+      /** Nur fuer Leistungsmessungen: Oberflaechentexturen im selben Bild an und aus. */
+      setSurfaces: (enabled: boolean) => {
+        if (this.surfaces === 'loaded') surfaceUniforms.uSurfaceReady.value = enabled ? 1 : 0
+      },
       setLodRange: (range: number) => {
         this.lod.range = range
         this.lod.update(this.rig.camera.position, true)
@@ -372,6 +383,7 @@ export class Game {
         mantling: this.player.isMantling,
         controlEnabled: this.player.controlEnabled,
         city: this.lod.stats,
+        surfaces: this.surfaces,
         render: {
           calls: this.renderer.info.render.calls,
           triangles: this.renderer.info.render.triangles,
