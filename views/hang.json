@@ -1,0 +1,12 @@
+[
+  { "name": "hang-aussicht", "pos": [0, 10.4, -78], "yaw": 3.1416, "pitch": 110 },
+  { "name": "hang-aussicht-west", "pos": [-34, 10.4, -78], "yaw": 2.7, "pitch": 90 },
+  { "name": "hang-untere-terrasse", "pos": [0, 3.6, -49], "yaw": 3.1416, "pitch": 60 },
+  { "name": "hang-von-promenade", "pos": [-2, 0.4, 29], "yaw": 0, "pitch": 40 },
+  { "name": "hang-rampe-ost", "pos": [30, 1.5, -43], "yaw": 1.5708 },
+  { "name": "hang-rampe-west", "pos": [-10, 6.2, -69], "yaw": -1.5708 },
+  { "name": "hang-obere-strasse", "pos": [10, 10.0, -99], "yaw": -1.5708 },
+  { "name": "hang-vom-dach", "pos": [9, 7.9, -28], "yaw": 0, "pitch": 60 },
+  { "name": "hang-treppe", "pos": [-12, 0.4, -44], "yaw": 0 },
+  { "name": "hang-blickgrenze", "pos": [0, 0.4, 20], "yaw": 0, "pitch": -300 }
+]

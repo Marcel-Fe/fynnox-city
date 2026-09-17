@@ -71,6 +71,23 @@ export const COLORS = {
   townFarGround: '#B9B3A2',
   cityFar: '#B4BEC0',
   cityFarShade: '#98A5AC',
+  // Grosse Stadt (17.09.2026): Rasen, Sportbelaege, Strand und Gebirge. Rasen
+  // ist heller und gelber als das Laub - sonst verschmelzen Baum und Wiese.
+  lawn: '#7DB860',
+  lawnStripe: '#6FAB54',
+  courtBlue: '#3F7FB5',
+  courtGreen: '#4E9A6B',
+  tartan: '#C45A3F',
+  sand: '#E9D6A6',
+  skateConcrete: '#BDBDB6',
+  seatCoral: '#D9674A',
+  seatTeal: '#2F8E96',
+  domeRoof: '#DCE7EA',
+  towerBody: '#5E7F99',
+  towerGlass: '#7FB3CC',
+  snow: '#F4F7FA',
+  rock: '#8C949A',
+  mountainFar: '#A9B8C4',
   // Vegetation nach 23_Natur_und_Kleinobjekte/01_Vegetation. Die Kronen sind
   // dort nie einfarbig - Sonnenseite hell, Kern dunkel.
   foliageLight: '#7FBB6A',
@@ -180,6 +197,14 @@ export const lookUniforms = {
   uLightTint: { value: tintColor('#FFF4E0') },
   /** Staerke der Einfaerbung. 0 = neutral wie vorher. */
   uTintStrength: { value: 0.45 },
+  /**
+   * Regler auf dem Spiegelanteil.
+   *
+   * 1 ist physikalisch richtig, sieht in diesem Stil aber nass aus. 0,8 laesst
+   * Glanzlichter deutlich stehen, ohne die Vollfarbflaechen zu ueberstrahlen,
+   * von denen der Stil lebt.
+   */
+  uSpecular: { value: 0.8 },
 }
 
 /**
@@ -290,14 +315,25 @@ const TOON_CHUNK = /* glsl */ `
 const TOON_OUTPUT = /* glsl */ `
   {
     vec3 albedo = max( diffuseColor.rgb, vec3( 1e-4 ) );
-    vec3 lightAmount = outgoingLight / albedo;
+    // GESTUFT WIRD NUR DER DIFFUSE ANTEIL.
+    //
+    // Bis 09.09.2026 lief die ganze Welt auf MeshLambertMaterial, und Lambert
+    // kennt keinen Spiegelanteil - kein Glanzlicht auf Asphalt, kein Schimmer
+    // auf Glas, kein Metall. Genau daran liest sich der Unterschied zu einem
+    // modernen Spiel ab, nicht an der Geometrie. Auf PBR umgestellt liegt der
+    // Glanz jetzt in totalSpecular und wird NICHT abgestuft: er ist die
+    // Spiegelung der Lichtquelle, keine Materialfarbe, und eine Treppung darin
+    // sieht nach Fehler aus. Der diffuse Anteil dagegen traegt die Farbe und
+    // behaelt seine kontrollierte Abstufung.
+    vec3 lightAmount = totalDiffuse / albedo;
     float lum = dot( lightAmount, vec3( 0.2126, 0.7152, 0.0722 ) );
     float scale = fynnoxToon( lum ) / max( lum, 1e-4 );
     vec3 tint = mix( uShadowTint, uLightTint, smoothstep( 0.12, 0.72, lum ) );
     tint = mix( vec3( 1.0 ), tint, uTintStrength );
-    outgoingLight = albedo * lightAmount * mix( 1.0, scale, uToonMix ) * tint;
+    vec3 shaded = albedo * lightAmount * mix( 1.0, scale, uToonMix ) * tint;
     float facing = clamp( dot( normalize( normal ), normalize( vViewPosition ) ), 0.0, 1.0 );
-    outgoingLight += smoothstep( 0.62, 1.0, 1.0 - facing ) * uRimStrength * uRimColor * lum;
+    vec3 rim = smoothstep( 0.62, 1.0, 1.0 - facing ) * uRimStrength * uRimColor * lum;
+    outgoingLight = shaded + totalSpecular * uSpecular + totalEmissiveRadiance + rim;
   }
 `
 
@@ -325,8 +361,12 @@ function injectOnce(source: string, anchor: string, replacement: string): string
  * angewendet, nicht kopiert - eine zweite Fassung wuerde beim naechsten
  * Look-Eingriff auseinanderlaufen.
  *
- * Er setzt hinter `map_fragment` an, arbeitet also auf der bereits texturierten
- * Grundfarbe. Eine Textur wird dadurch abgestuft und ueberstrahlt, nicht ersetzt.
+ * Er setzt hinter `color_fragment` an, arbeitet also auf der bereits
+ * texturierten und mit Vertexfarben multiplizierten Grundfarbe. Eine Textur wird
+ * dadurch abgestuft und ueberstrahlt, nicht ersetzt. Bis 17.09.2026 sass er
+ * hinter `map_fragment` - fuer Materialien ohne Vertexfarben ist das dasselbe,
+ * die Stadtkacheln tragen ihre Farbe aber im Vertex, und davor gerechnet haette
+ * die Saettigungsvariation auf Weiss gearbeitet.
  */
 export function applyLookPatch(material: THREE.Material): void {
   material.onBeforeCompile = (shader) => {
@@ -359,12 +399,13 @@ uniform float uGrain;
 uniform vec3 uShadowTint;
 uniform vec3 uLightTint;
 uniform float uTintStrength;
+uniform float uSpecular;
 ${NOISE_CHUNK}
 ${TOON_CHUNK}
 void main() {`,
         ),
-        '#include <map_fragment>',
-        `#include <map_fragment>\n${SURFACE_CHUNK}`,
+        '#include <color_fragment>',
+        `#include <color_fragment>\n${SURFACE_CHUNK}`,
       ),
       '#include <opaque_fragment>',
       `${TOON_OUTPUT}\n#include <opaque_fragment>`,
@@ -377,40 +418,173 @@ void main() {`,
   material.customProgramCacheKey = () => 'fynnox-toon-rim'
 }
 
-const cache = new Map<string, THREE.MeshLambertMaterial>()
+/**
+ * Oberflaecheneigenschaften je Material.
+ *
+ * Rauheit und Metallanteil sind das, was PBR ueberhaupt erst sichtbar macht.
+ * Ohne diese Tabelle bekaeme jede Flaeche denselben Glanz - Asphalt wie Glas,
+ * Putz wie Messing -, und das laese als Plastik, nur eben glaenzendes.
+ *
+ * Nachgeschlagen wird ueber die FARBE, nicht ueber den Namen: `WorldBuilder`
+ * reicht `COLORS.paving` weiter, also den Farbwert, nicht den Schluessel.
+ */
+const SURFACE: Partial<Record<MaterialKey, { roughness: number; metalness?: number }>> = {
+  glass: { roughness: 0.06 },
+  fynnoxGlass: { roughness: 0.08 },
+  water: { roughness: 0.1 },
+  metal: { roughness: 0.32, metalness: 0.85 },
+  iron: { roughness: 0.42, metalness: 0.7 },
+  gold: { roughness: 0.26, metalness: 0.9 },
+  bronze: { roughness: 0.3, metalness: 0.85 },
+  bronzeDark: { roughness: 0.36, metalness: 0.85 },
+  fynnoxBrass: { roughness: 0.28, metalness: 0.9 },
+  patina: { roughness: 0.55, metalness: 0.5 },
+  patinaLight: { roughness: 0.6, metalness: 0.4 },
+  solarPanel: { roughness: 0.12, metalness: 0.4 },
+  // Nasser Hafenasphalt: die Fahrbahn ist die groesste zusammenhaengende
+  // Flaeche der Stadt und damit die, auf der ein Glanzstreifen am meisten traegt.
+  asphalt: { roughness: 0.55 },
+  roof: { roughness: 0.5 },
+  paving: { roughness: 0.82 },
+  concrete: { roughness: 0.9 },
+  stone: { roughness: 0.88 },
+  stoneShade: { roughness: 0.88 },
+  wood: { roughness: 0.72 },
+  barkPale: { roughness: 0.92 },
+  barkDark: { roughness: 0.92 },
+  foliage: { roughness: 0.95 },
+  foliageDark: { roughness: 0.95 },
+  foliageLight: { roughness: 0.95 },
+  tyre: { roughness: 0.95 },
+  towerGlass: { roughness: 0.08, metalness: 0.3 },
+  towerBody: { roughness: 0.35, metalness: 0.5 },
+  domeRoof: { roughness: 0.3, metalness: 0.6 },
+  lawn: { roughness: 0.95 },
+  lawnStripe: { roughness: 0.95 },
+  snow: { roughness: 0.6 },
+  lanternGlow: { roughness: 0.4 },
+}
 
-/** Lambert als Basis - mobil guenstig - mit aufgesetzter Toon-Stufung und Streiflicht. */
-export function mat(key: MaterialKey | string, options?: { transparent?: number }): THREE.MeshLambertMaterial {
+/** Farbwert zurueck auf den Materialnamen. Gleiche Farbe heisst gleiche Oberflaeche. */
+const KEY_BY_HEX = new Map<string, MaterialKey>()
+for (const [key, hex] of Object.entries(COLORS)) {
+  if (!KEY_BY_HEX.has(hex)) KEY_BY_HEX.set(hex, key as MaterialKey)
+}
+
+const cache = new Map<string, THREE.MeshStandardMaterial>()
+
+/**
+ * Weltmaterial: PBR mit aufgesetzter Toon-Stufung, Warm-Kalt-Kontrast und
+ * Streiflicht.
+ *
+ * Die Basis war bis 09.09.2026 Lambert - guenstig, aber ohne jeden
+ * Spiegelanteil. Der Nutzer hat gemeldet, die Welt wirke nicht wie ein
+ * modernes Spiel, "wo die Welt schoen glaenzend gestaltet ist"; das war keine
+ * Frage der Farbe, sondern des Beleuchtungsmodells.
+ */
+export function mat(key: MaterialKey | string, options?: { transparent?: number }): THREE.MeshStandardMaterial {
   const color = (COLORS as Record<string, string>)[key] ?? key
   const id = `${color}|${options?.transparent ?? 1}`
   let material = cache.get(id)
   if (!material) {
-    material = new THREE.MeshLambertMaterial({
+    const name = KEY_BY_HEX.get(color)
+    const surface = (name && SURFACE[name]) ?? { roughness: 0.85 }
+    material = new THREE.MeshStandardMaterial({
       color: new THREE.Color(color),
+      roughness: surface.roughness,
+      metalness: surface.metalness ?? 0,
+      envMapIntensity: ENV_INTENSITY,
       transparent: (options?.transparent ?? 1) < 1,
       opacity: options?.transparent ?? 1,
     })
     applyLookPatch(material)
     cache.set(id, material)
+    worldMaterials.push(material)
+  }
+  return material
+}
+
+/** Rauheit und Metallanteil einer Farbe - dieselbe Tabelle wie in `mat()`. */
+export function surfaceOf(color: string): { roughness: number; metalness: number } {
+  const name = KEY_BY_HEX.get(color)
+  const surface = (name && SURFACE[name]) ?? { roughness: 0.85 }
+  return { roughness: surface.roughness, metalness: surface.metalness ?? 0 }
+}
+
+const vertexCache = new Map<string, THREE.MeshStandardMaterial>()
+
+/**
+ * Material fuer Geometrie, die ihre Farbe im Vertex traegt.
+ *
+ * Die grosse Stadt verschmilzt je Kachel ALLE Farben einer Oberflaechenart zu
+ * einem Mesh. Mit einem Material je Farbe waeren es rund vierzig Draw-Calls je
+ * Kachel und bei hundertfuenfzig Kacheln weit ueber das hinaus, was eine
+ * Onboard-Grafik schafft. Getrennt wird nur noch nach dem, was sich nicht in
+ * den Vertex legen laesst: Rauheit und Metallanteil.
+ */
+export function vertexColorMat(color: string): THREE.MeshStandardMaterial {
+  const { roughness, metalness } = surfaceClass(color)
+  const id = `${roughness}|${metalness}`
+  let material = vertexCache.get(id)
+  if (!material) {
+    material = new THREE.MeshStandardMaterial({
+      color: 0xffffff,
+      vertexColors: true,
+      roughness,
+      metalness,
+      envMapIntensity: ENV_INTENSITY,
+    })
+    applyLookPatch(material)
+    vertexCache.set(id, material)
   }
   return material
 }
 
 /**
+ * Oberflaechenklasse fuer Vertexfarben: Rauheit und Metall auf wenige Stufen
+ * gerundet. Jede Stufe ist ein eigenes Material und damit ein eigener
+ * Draw-Call je Kachel - mit den feinen Werten der Tabelle waren es ueber
+ * tausend Draw-Calls im Bild.
+ */
+function surfaceClass(color: string): { roughness: number; metalness: number } {
+  const { roughness, metalness } = surfaceOf(color)
+  const r = roughness < 0.2 ? 0.1 : roughness < 0.65 ? 0.45 : 0.88
+  const m = metalness < 0.2 ? 0 : metalness < 0.6 ? 0.45 : 0.85
+  return { roughness: r, metalness: m }
+}
+
+/** Schluessel der Oberflaechenart - gleiche Schluessel teilen ein Material. */
+export function surfaceKey(color: string): string {
+  const { roughness, metalness } = surfaceClass(color)
+  return `${roughness}|${metalness}`
+}
+
+/**
+ * Staerke der Umgebungsspiegelung. Sie kommt aus `scene.environment`, also aus
+ * dem Himmel - deshalb faerbt sie Glas und Metall mit der Tageszeit um.
+ */
+const ENV_INTENSITY = 0.75
+const worldMaterials: THREE.MeshStandardMaterial[] = []
+
+/**
  * Material fuer eine texturierte Figur im Stadtlook.
  *
  * Das geladene GLB bringt ein `MeshStandardMaterial` mit Metall- und
- * Rauheitskarte mit. Beides bleibt hier liegen: die Stadt wird durchgehend mit
- * Lambert beleuchtet, und eine PBR-Figur mitten darin haette ein anderes
- * Lichtverhalten als jedes Objekt um sie herum - genau der Stilbruch, der
- * vermieden werden soll. Uebernommen werden Grundfarbe und Normalenkarte, also
- * das, was die Figur ausmacht.
+ * Rauheitskarte mit. Bis 09.09.2026 wurde beides weggeworfen und die Figur auf
+ * Lambert heruntergestuft, damit sie sich nicht vom Rest der Stadt abhebt.
+ * Seit die Stadt selbst PBR ist, gilt das Gegenteil: die Karten bleiben, und
+ * die Figur bekommt denselben Look-Patch wie jede Wand.
  */
-export function characterMaterial(source: THREE.MeshStandardMaterial): THREE.MeshLambertMaterial {
-  const material = new THREE.MeshLambertMaterial({
+export function characterMaterial(source: THREE.MeshStandardMaterial): THREE.MeshStandardMaterial {
+  const material = new THREE.MeshStandardMaterial({
     map: source.map,
     normalMap: source.normalMap,
+    roughnessMap: source.roughnessMap,
+    metalnessMap: source.metalnessMap,
     color: source.color,
+    roughness: source.roughnessMap ? 1 : 0.7,
+    metalness: source.metalnessMap ? 1 : 0.05,
+    envMapIntensity: ENV_INTENSITY,
   })
   if (source.normalScale) material.normalScale.copy(source.normalScale)
   applyLookPatch(material)

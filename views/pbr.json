@@ -1,0 +1,5 @@
+[
+  { "name": "pbr-strasse", "pos": [0, 0.4, -14], "yaw": -1.5708 },
+  { "name": "pbr-hafen", "pos": [0, 0.4, 29], "yaw": 3.1416 },
+  { "name": "pbr-terrasse", "pos": [0, 10.4, -78], "yaw": 3.1416 }
+]

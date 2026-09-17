@@ -118,3 +118,32 @@ im Code nicht gab. Zwei Laeufe lieferten bis auf die letzte Stelle dieselben
 Zahlen; genau das war der Hinweis, dass nicht die Aenderung dazwischen wirkte,
 sondern der Zustand davor. Eine Suite ohne Ruecksetzpunkte ist eine Kette:
 wer hinten anhaengt, erbt alles, was vorne passiert ist.
+
+## 2026-09-09 (abends) — "Sieht nicht aus wie ein modernes Spiel" war eine Zeile Code
+
+**Meldung:** "Von der Farbpracht sind wir noch weit weg. Es wirkt nicht nach den
+modernen Spielen wie GTA, wo die Welt schoen glaenzend gestaltet ist."
+
+**Ursache:** `Palette.mat()` lieferte `MeshLambertMaterial`. Lambert rechnet
+ausschliesslich den diffusen Anteil — es gibt **keinen Spiegelterm**. Kein
+Glanzlicht auf Asphalt, kein Schimmer auf Glas, kein Metall, keine Spiegelung im
+Wasser. Genau daraus besteht der Eindruck "glaenzend". Die geladene Fynnox-Figur
+brachte sogar Rauheits- und Metallkarten mit und wurde beim Einlesen bewusst auf
+Lambert heruntergestuft, damit sie zur Stadt passt.
+
+**Warum es so lange stand:** Das Materialfundament war 08/2026 sorgfaeltig
+gebaut — Toon-Stufung, Warm-Kalt-Kontrast, Streiflicht, Oberflaechenrauschen,
+Bloom, Farbgraduierung. Alles davon arbeitet auf dem diffusen Anteil. Es sah
+nach viel Optikarbeit aus, und die eine fehlende Groesse fiel deshalb nicht auf.
+Jede weitere Runde Farbe, Geometrie und Postprocessing lief am Problem vorbei.
+
+**Lektion:** Wenn eine Optikmeldung dreimal wiederkommt, obwohl sichtbar viel
+Optikarbeit passiert ist, liegt der Fehler wahrscheinlich nicht im Zuviel,
+sondern in einer Groesse, die gar nicht gerechnet wird. Vor der naechsten Runde
+Feinschliff einmal fragen, welche Terme das Beleuchtungsmodell ueberhaupt hat.
+
+**Zweite Lektion:** Ein Kommentar kann eine Entscheidung so gut begruenden, dass
+niemand sie mehr prueft. In `characterMaterial()` stand ausfuehrlich, warum die
+PBR-Karten der Figur weggeworfen werden — "eine PBR-Figur mitten in einer
+Lambert-Stadt waere ein Stilbruch". Das war richtig und hat trotzdem die falsche
+Frage beantwortet: nicht die Figur war zu gut, die Stadt war zu schlecht.

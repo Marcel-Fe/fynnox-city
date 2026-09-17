@@ -1,6 +1,7 @@
 import { iconFileByAction, minimumBodyTextPx, minimumTouchTargetPx } from '../contracts/manifests'
 import type { HudStateId, UiActionId } from '../contracts/types'
 import { detectHighDetail } from '../core/Palette'
+import { CITY, type CityPlan } from '../city/CityPlan'
 import type { InputManager, VirtualButton } from '../input/InputManager'
 
 export interface Settings {
@@ -540,26 +541,44 @@ export class HUD {
     this.callbacks.onOnboardingDone()
   }
 
-  /** Minimap in Weltkoordinaten: x -60..60, z -42..52. */
-  drawMinimap(playerX: number, playerZ: number, heading: number, markers: MapMarker[]): void {
-    const ctx = this.minimapContext
-    const size = this.minimapCanvas.width
-    const toX = (x: number) => ((x + 60) / 120) * size
-    const toY = (z: number) => ((z + 42) / 94) * size
+  /**
+   * Flaechen der Karte, einmal aus dem Stadtplan abgeleitet.
+   *
+   * Bis 17.09.2026 zeichnete die Karte einen festen Ausschnitt von 168 m, weil
+   * die Welt kaum groesser war. Die Stadt misst jetzt 1,1 km - die Karte folgt
+   * deshalb dem Spieler und zeichnet nur, was im Ausschnitt liegt.
+   */
+  private mapRects: { x0: number; z0: number; x1: number; z1: number; color: string }[] = []
 
-    ctx.clearRect(0, 0, size, size)
-    ctx.fillStyle = '#173B54'
-    ctx.fillRect(0, 0, size, size)
-    ctx.fillStyle = '#1C7E93'
-    ctx.fillRect(0, toY(34), size, size - toY(34))
-    ctx.fillStyle = '#3B4652'
-    ctx.fillRect(0, toY(-15), size, toY(-9) - toY(-15))
-    ctx.fillRect(toX(-3), toY(-12), toX(3) - toX(-3), toY(34) - toY(-12))
-    ctx.fillStyle = '#C6C7BC'
-    ctx.fillRect(0, toY(26), size, toY(32) - toY(26))
-
-    ctx.fillStyle = '#F3E3C8'
-    const buildings: [number, number, number, number][] = [
+  setCityMap(city: CityPlan): void {
+    const rects: HUD['mapRects'] = []
+    const add = (x0: number, z0: number, x1: number, z1: number, color: string) => rects.push({ x0, z0, x1, z1, color })
+    // Hoehenstufen: nach oben heller, wie in der Welt.
+    add(CITY.west, CITY.lowerFrom, CITY.east, CITY.quay, '#1E4760')
+    add(CITY.west, CITY.upperFrom, CITY.east, CITY.lowerFrom, '#22506B')
+    add(CITY.west, CITY.north, CITY.east, CITY.upperFrom, '#2C6483')
+    const kindColor: Record<string, string> = {
+      park: '#4F8F5A',
+      pitch: '#4F8F5A',
+      stadium: '#3E7F52',
+      skatepark: '#9AA3A8',
+      courts: '#3F7FB5',
+      plaza: '#C9BC98',
+      gas: '#E4784F',
+      market: '#D9B25B',
+      arena: '#E5DCC8',
+      downtown: '#A9C6DA',
+    }
+    for (const block of city.blocks) {
+      add(block.lot.x0, block.lot.z0, block.lot.x1, block.lot.z1, kindColor[block.kind] ?? '#F3E3C8')
+    }
+    for (const street of city.streets) add(street.road.x0, street.road.z0, street.road.x1, street.road.z1, '#3B4652')
+    // Handgebautes Hafenviertel: Strassen, Promenade, Bebauung.
+    add(-80, -15, 80, -9, '#3B4652')
+    add(-3, -12, 3, 34, '#3B4652')
+    add(-80, 26, 80, 32, '#C6C7BC')
+    add(CITY.west, 26, CITY.east, 32, '#C6C7BC')
+    for (const [x, z, w, d] of [
       [-38, -30, 16, 12],
       [4, -34, 10, 12],
       [20, -34, 10, 12],
@@ -567,9 +586,30 @@ export class HUD {
       [-18, -32, 14, 10],
       [-16, 14, 10, 8],
       [4, 26, 12, 8],
-    ]
-    for (const [x, z, w, d] of buildings) {
-      ctx.fillRect(toX(x), toY(z), (w / 120) * size, (d / 94) * size)
+      [-76, -60, 140, 12],
+      [-76, -96, 140, 12],
+      [-76, -112, 140, 10],
+    ]) {
+      add(x, z, x + w, z + d, '#F3E3C8')
+    }
+    this.mapRects = rects
+  }
+
+  drawMinimap(playerX: number, playerZ: number, heading: number, markers: MapMarker[]): void {
+    const ctx = this.minimapContext
+    const size = this.minimapCanvas.width
+    const SPAN = 200
+    const half = SPAN / 2
+    const toX = (x: number) => ((x - playerX + half) / SPAN) * size
+    const toY = (z: number) => ((z - playerZ + half) / SPAN) * size
+
+    ctx.clearRect(0, 0, size, size)
+    ctx.fillStyle = '#1C7E93'
+    ctx.fillRect(0, 0, size, size)
+    for (const r of this.mapRects) {
+      if (r.x1 < playerX - half || r.x0 > playerX + half || r.z1 < playerZ - half || r.z0 > playerZ + half) continue
+      ctx.fillStyle = r.color
+      ctx.fillRect(toX(r.x0), toY(r.z0), toX(r.x1) - toX(r.x0), toY(r.z1) - toY(r.z0))
     }
 
     for (const marker of markers) {

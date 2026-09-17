@@ -34,12 +34,21 @@ const LOOK_HOLD = 1.0
 /** Ab dieser Bahngeschwindigkeit gilt die Bewegung als gewollt (m/s). */
 const FOLLOW_MIN_SPEED = 1.2
 
+/**
+ * Abstand und Neigung der Fussgaengerkamera.
+ *
+ * 5,2 m und 0,25 rad standen hier bis 09.09.2026. In den Bildreferenzen steht
+ * die Kamera deutlich weiter hinten und hoeher: die Figur nimmt rund ein
+ * Sechstel der Bildhoehe ein, und man sieht ueber sie hinweg die halbe Strasse.
+ * Bei 5,2 m fuellte sie ein Drittel - die Welt sah dadurch eng aus, ohne dass
+ * eine einzige Wand naeher gestanden haette.
+ */
 const ON_FOOT: CameraTarget = {
   position: new THREE.Vector3(),
-  distance: 5.2,
+  distance: 7.2,
   minPitch: -0.55,
   maxPitch: 1.15,
-  height: 1.25,
+  height: 1.3,
 }
 
 /**
@@ -51,7 +60,7 @@ export class OrbitCameraRig {
   readonly camera: THREE.PerspectiveCamera
   /** Startblick die Hauptstrasse entlang - vor dem Rolltor bleibt Platz. */
   yaw = -Math.PI / 2
-  pitch = 0.25
+  pitch = 0.32
   private readonly focus = new THREE.Vector3()
   private readonly desired = new THREE.Vector3()
   private readonly smoothed = new THREE.Vector3()
@@ -96,7 +105,10 @@ export class OrbitCameraRig {
     // Sichtweite 560 m: der Bergkamm der Kulisse steht bei bis zu 458 m vom
     // Ursprung, und der Spieler kann sich noch einmal 80 m davon entfernen.
     // Bei den alten 400 m wurde er je nach Standort abgeschnitten.
-    this.camera = new THREE.PerspectiveCamera(58, 1, 0.1, 560)
+    // Die Sichtweite reicht bis zum Horizont der grossen Stadt: Berge und die
+    // Skyline gegenueber stehen 1,5 bis 2,3 km weit weg. Mit 560 m wie zuvor
+    // endete die Welt mitten in der Stadt an einer harten Kante.
+    this.camera = new THREE.PerspectiveCamera(58, 1, 0.1, 2800)
   }
 
   get activeProfile(): string {

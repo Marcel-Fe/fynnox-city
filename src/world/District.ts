@@ -1,7 +1,10 @@
 import * as THREE from 'three'
 import { COLORS } from '../core/Palette'
 import type { CollisionWorld } from '../core/CollisionWorld'
-import { WorldBuilder } from './WorldBuilder'
+import { WorldBuilder, type NearChunk } from './WorldBuilder'
+import { buildCity } from '../city/CityBuilder'
+import { buildHorizon } from '../city/Horizon'
+import { createCityPlan, type CityPlan } from '../city/CityPlan'
 import { PartBatcher, box, cone, cylinder, sphere, torus } from '../core/Shapes'
 import type { MotionParts } from './AmbientMotion'
 
@@ -75,6 +78,10 @@ export interface DistrictAnchors {
   motion: MotionParts
   /** Mittelpunkt des Hafenbeckens, Bezugspunkt der Moewenbahnen. */
   basin: THREE.Vector3
+  /** Nahkacheln der grossen Stadt fuer `ChunkLod`. */
+  nearChunks: NearChunk[]
+  /** Stadtplan - Grundlage der Karte. */
+  city: CityPlan
 }
 
 interface BuildingOptions {
@@ -93,6 +100,12 @@ interface BuildingOptions {
    * und zwei Balkone auf 4,6 m durchdringen sich sichtbar.
    */
   frontDecor?: boolean
+  /**
+   * Hoehe der Standflaeche. Bis 09.09.2026 stand jedes Haus auf y = 0, weil das
+   * ganze Gelaende auf y = 0 lag. Die Hangstadt im Norden steht auf Terrassen -
+   * ohne diesen Wert saessen ihre Haeuser im Berg statt darauf.
+   */
+  baseY?: number
 }
 
 function buildingHeight(options: BuildingOptions): number {
@@ -104,8 +117,11 @@ export function buildDistrict(scene: THREE.Scene, collision: CollisionWorld): Di
   const b = new WorldBuilder(scene, collision)
 
   buildTerrain(b)
-  buildBackdrop(b)
+  const city = createCityPlan()
+  buildHorizon(b)
+  buildCity(b, city)
   buildRoads(b)
+  buildUpperTown(b)
   buildFoxtailGarage(b)
   const blockA = buildFacadeBuilding(b, {
     x0: 4,
@@ -230,6 +246,8 @@ export function buildDistrict(scene: THREE.Scene, collision: CollisionWorld): Di
     // Bauteilhoehe - wer sie als Sitzhoehe liest, setzt die Figur 15 cm zu tief
     // an und, weil unten die Huefthoehe fehlte, am Ende auf die Lehne.
     npcSeats: BENCH_SPOTS.map(([x, z]) => new THREE.Vector3(x, BENCH_SEAT_Y, z)),
+    nearChunks: b.nearChunks,
+    city,
   }
 }
 
@@ -243,322 +261,427 @@ function drift(seed: number): number {
   return v - Math.floor(v)
 }
 
-/** Weiche Kuppe: eine gestauchte Kugel, deren Unterhaelfte unter Grund liegt. */
-function backdropHill(
-  b: WorldBuilder,
-  x: number,
-  z: number,
-  radius: number,
-  height: number,
-  color: string,
-  seed: number,
-): void {
-  const sink = radius * 0.4
-  b.shape(
-    sphere(radius, 14, 8),
-    color,
-    {
-      pos: [x, -sink, z],
-      scale: [1, (height + sink) / radius, 0.6 + drift(seed) * 0.5],
-      rot: [0, drift(seed + 7) * Math.PI, 0],
-    },
-    { collide: false },
-  )
-}
+/**
+ * Die Hangstadt im Norden.
+ *
+ * Bis 09.09.2026 lag die gesamte begehbare Welt auf einer Ebene bei y = 0 und
+ * mass 160 x 94 m. Der Nutzer hat beides gemeldet - "weit weg von 2,5D, 3D" und
+ * "wirkt unglaublich klein". Beides hat dieselbe Wurzel, und beides loest
+ * dieselbe Massnahme: die Stadt bekommt einen Hang und waechst nach Norden in
+ * ihn hinein.
+ *
+ * Die Zahlen stehen hier zusammen und nicht bei den einzelnen Bauteilen, weil
+ * Gelaende, Stuetzmauern, Rampenstrassen, Treppen, Bebauung UND die Kulisse
+ * dahinter dieselben Kanten teilen. Wer eine Kante verschiebt, verschiebt ihre
+ * Nachbarn mit - das ist die Lehre aus der Tiefenstaffelung der Kulisse.
+ */
+const UPPER = {
+  /**
+   * Vorderkante der unteren Terrasse. Suedlich davon bleibt alles auf y = 0.
+   * Der Wert hat Luft nach hinten: `acceptance.mjs` stellt die Figur bei
+   * (9, -37) hinter Block A ab und erwartet dort Boden auf Strassenniveau.
+   */
+  lowerFrom: -46,
+  lowerY: 3.2,
+  /** Vorderkante der oberen Terrasse - hier steht die Aussichtsbruestung. */
+  upperFrom: -72,
+  upperY: 9.6,
+  /** Hintere Kante der begehbaren Welt; dahinter beginnt die Kulisse. */
+  back: -112,
+  /**
+   * Sichtschneise. Zwischen -x und +x bleibt die untere Terrasse unbebaut.
+   *
+   * Ohne sie ist die obere Terrasse umsonst gebaut: von ihrer Bruestung geht
+   * der Blick 11,1 m hoch ueber die Dachlinie der Altstadt (7,8 m) hinweg und
+   * trifft bei z = 34 noch auf 1,9 m - also aufs Wasser. Ein viergeschossiges
+   * Haus auf der unteren Terrasse steht dagegen bei 12,8 m und schiebt sich
+   * genau davor. Das ist die Bildkomposition aus
+   * 03_Bildreferenzen/01_Gameplay/01_Freie_Stadterkundung.png.
+   */
+  vistaX: 20,
+} as const
 
-/** Kamm: ein grober Kegel, spitzer als eine Kuppe und deshalb weiter hinten. */
-function backdropPeak(
-  b: WorldBuilder,
-  x: number,
-  z: number,
-  radius: number,
-  height: number,
-  color: string,
-  seed: number,
-): void {
-  const base = -8
-  const full = height - base
-  b.shape(
-    cone(radius, full, 7),
-    color,
-    {
-      pos: [x, base + full / 2, z],
-      rot: [0, drift(seed) * Math.PI, 0],
-      scale: [1, 1, 0.65 + drift(seed + 3) * 0.4],
-    },
-    { collide: false },
-  )
-}
+/** Regelsteigung barrierearmer Rampen: 6 Prozent. */
+const RAMP_GRADE = 0.06
+/**
+ * Laenge einer Kollisionsstufe der Rampe.
+ *
+ * `CollisionWorld` kennt keine schraegen Flaechen - eine Steigung ist deshalb
+ * immer eine Treppe. Bei 2,0 m Auftritt und 6 Prozent misst eine Stufe 0,12 m
+ * und liegt damit weit unter der Stufenautomatik von 0,35 m in `moveAndSlide()`:
+ * die Figur laeuft glatt hindurch, ohne zu springen. Groesser gewaehlt spart
+ * Boxen, laesst die Figur aber sichtbar in den Belag einsinken - der liegt als
+ * durchgehende Schraege darueber und folgt der Treppe nicht.
+ */
+const RAMP_STEP = 2.0
 
 /**
- * Kulissenstadt hinter der Spielflaeche.
+ * Steigende Strasse auf einem Damm.
  *
- * Das Gelaende endet bei z = -60, und dahinter lag zuletzt Wiese mit Wald. In
- * den Bildreferenzen blickt man von jedem erhoehten Punkt ueber Daecher,
- * Gassen und Hoefe - erst dahinter kommen Huegel. Eine Stadt, die nach 60 m in
- * Gruenland uebergeht, liest als Modell auf einem Tisch, nicht als Stadt.
- *
- * Der Aufbau ist ein Raster mit Luecken: die freien Felder sind die Gassen,
- * und ohne sie waere es eine geschlossene Mauer. Zur Tiefe hin werden die
- * Haeuser niedriger, damit die Huegel dahinter sichtbar bleiben.
- *
- * Alles ohne Kollision. Erreichbar ist davon nichts - die Kulisse beginnt
- * 10 m hinter der letzten begehbaren Flaeche.
+ * `y` ist die Hoehe am Fusspunkt, `rise` der Hoehenunterschied. Die Strasse
+ * laeuft von (`x`, `z`) aus in Richtung `dir` entlang der Achse `axis`.
  */
-function buildBackdropTown(b: WorldBuilder, band: { from: number; to: number }): void {
-  const walls = [
-    COLORS.townFarCream,
-    COLORS.townFarCoral,
-    COLORS.townFarTeal,
-    COLORS.townFarBlue,
-    COLORS.townFarCream,
-  ]
-  // Stadtboden unter der Kulisse. Ohne ihn stehen die Haeuser auf Wiese - in
-  // den Bildreferenzen liegt zwischen den Blocks Pflaster, kein Gruen.
-  const rows = 6
-  const stepZ = (band.from - band.to) / (rows - 1)
-  b.box({
-    x: 0,
-    y: -1,
-    z: (band.from + band.to) / 2,
-    w: 620,
-    h: 1.06,
-    d: band.from - band.to + 40,
-    color: COLORS.townFarGround,
-    collide: false,
-  })
+export function rampRoad(
+  b: WorldBuilder,
+  o: {
+    x: number
+    z: number
+    y: number
+    width: number
+    rise: number
+    axis: 'x' | 'z'
+    /** +1 laeuft nach +x bzw. +z, -1 in die Gegenrichtung. */
+    dir: 1 | -1
+    color: string
+    /** Unterkante des Damms. Standard: 1 m unter dem Fusspunkt. */
+    baseY?: number
+    grade?: number
+  },
+): { x: number; z: number; y: number } {
+  const grade = o.grade ?? RAMP_GRADE
+  const length = o.rise / grade
+  const steps = Math.max(1, Math.round(length / RAMP_STEP))
+  const run = length / steps
+  const rise = o.rise / steps
+  const floor = o.baseY ?? o.y - 1
 
-  const stepX = 20
-  let seed = 700
-  for (let ix = -12; ix <= 12; ix++) {
-    for (let iz = 0; iz < rows; iz++) {
-      seed += 1
-      // Gassen: einzelne Felder bleiben frei. Vorher blieb jedes vierte frei -
-      // bei 26 m Raster und 13 m Haeusern stand die Kulisse dadurch so weit
-      // auseinander, dass zwischen den Haeusern mehr Wiese lag als Stadt.
-      if (drift(seed) < 0.13) continue
-      const x = ix * stepX + (drift(seed + 1) - 0.5) * 5
-      const z = band.from - iz * stepZ - drift(seed + 2) * 6
-      const depth = iz / (rows - 1)
-      const height = 7 + (1 - depth) * 3.5 + drift(seed + 3) * 9
-      const w = 15 + drift(seed + 4) * 8
-      const d = 13 + drift(seed + 5) * 6
-      const wall = walls[Math.floor(drift(seed + 6) * walls.length) % walls.length]
-      b.box({ x, y: 0, z, w, h: height, d, color: wall, collide: false })
-      b.box({ x, y: height, z, w: w + 1.1, h: 0.7, d: d + 1.1, color: COLORS.townFarRoof, collide: false })
-      // Sockelgeschoss und Fensterbaender - nur auf den vorderen Reihen, weiter
-      // hinten waeren sie kleiner als ein Pixel.
-      //
-      // Ohne die Baender ist jedes dieser Haeuser ein einfarbiger Klotz, und
-      // ein Klotz in 40 m Entfernung liest als Klotz, nicht als Haus. Ein
-      // liegendes Band je Geschoss reicht: es gibt der Flaeche einen Massstab.
-      if (iz < 4) {
-        b.box({ x, y: 0, z, w: w + 0.2, h: 3.2, d: d + 0.2, color: COLORS.townFarTeal, collide: false })
-        const floors = Math.floor((height - 3.6) / 3.2)
-        for (let f = 0; f < floors; f++) {
-          const y = 3.9 + f * 3.2
-          for (const side of [-1, 1]) {
-            b.box({
-              x,
-              y,
-              z: z + (side * (d + 0.24)) / 2,
-              w: w - 2.6,
-              h: 1.5,
-              d: 0.12,
-              color: COLORS.townFarWindow,
-              collide: false,
-            })
-            b.box({
-              x: x + (side * (w + 0.24)) / 2,
-              y,
-              z,
-              w: 0.12,
-              h: 1.5,
-              d: d - 2.6,
-              color: COLORS.townFarWindow,
-              collide: false,
-            })
-          }
-        }
-      }
-    }
-  }
-}
-
-/**
- * Ferne Kulisse: Kueste, Huegelketten und eine Stadt am Horizont.
- *
- * Ohne sie endet die Welt an einer Kante. Die Spielflaeche reicht von x -80
- * bis 80 und von z -60 bis 34, dahinter lag Wasser und darueber leerer Himmel -
- * im Bild kein Horizont, keine Tiefe, und die Stadt schwebte auf einer Platte.
- * Genau daran unterscheidet sich der Anblick am staerksten von den
- * Bildreferenzen, in denen sich Huegel, Hochhaeuser und Berge staffeln.
- *
- * Drei Regeln halten das zusammen:
- * 1. Alles ohne Kollision und weit ausserhalb - die Kulisse ist nie erreichbar.
- * 2. Luftperspektive statt Detail: je weiter hinten, desto heller und blauer.
- *    Der Nebel (ab 140 m) blendet zusaetzlich zur Horizontfarbe hin.
- * 3. Nichts steht naeher als 70 m. Naeher wuerde die grobe Form auffallen.
- */
-function buildBackdrop(b: WorldBuilder): void {
-  // Gegenueberliegende Kueste als Ring um die Bucht. Eine liegende Scheibe mit
-  // Loch: innen bleibt das Hafenbecken frei, aussen schliesst der Horizont.
-  b.shape(
-    new THREE.RingGeometry(178, 340, 72, 1),
-    COLORS.coastFar,
-    { pos: [0, 0.5, 30], rot: [-Math.PI / 2, 0, 0] },
-    { collide: false },
-  )
-
-  // Hinterland: das Gelaende endet bei z = -60. Ohne Boden dahinter klafft
-  // zwischen Stadtrand und Huegelfuss ein Streifen Himmel dort, wo Land sein
-  // muesste - vom Dach aus sofort zu sehen.
-  b.box({ x: 0, y: -1, z: -230, w: 760, h: 1.04, d: 350, color: COLORS.hinterland, collide: false })
-
-  /**
-   * Die Tiefenstufen liegen hintereinander, nicht ineinander.
-   *
-   * Vorher taten sie das nicht: die Huegel standen bei z -98 und -132, die
-   * Kulissenstadt reichte von -82 bis -208. Die Huegel wuchsen also mitten
-   * durch die Haeuser, und weil eine Kuppe mit 120 m Radius auch in der Tiefe
-   * 120 m misst, schob sich die vorderste sogar bis an den Stadtrand. Im Bild
-   * sass die Stadt auf einer gruenen Wiese statt auf ihrem eigenen Boden.
-   *
-   * Die Grenzen stehen deshalb hier zusammen und werden von unten nach oben
-   * eingehalten. Wer eine Stufe verschiebt, verschiebt auch ihre Nachbarn.
-   */
-  const BAND = {
-    town: { from: -85, to: -175 },
-    woodland: { from: -196, to: -230 },
-    hills: { from: -250, to: -286 },
-    ridge: { from: -300, to: -340 },
-  }
-
-  buildBackdropTown(b, BAND.town)
-
-  // Waldsaum hinter der Stadt: niedrig genug, dass die Ketten dahinter sichtbar
-  // bleiben. Zwei Gruentoene im Wechsel, sonst liest der Wald als ein Teppich.
-  for (let i = 0; i < 46; i++) {
-    const x = -320 + drift(i + 500) * 640
-    const z = BAND.woodland.from - drift(i + 540) * (BAND.woodland.from - BAND.woodland.to)
-    backdropHill(
-      b,
-      x,
-      z,
-      13 + drift(i + 580) * 16,
-      6 + drift(i + 620) * 9,
-      drift(i + 660) > 0.5 ? COLORS.woodFar : COLORS.woodFarDark,
-      i + 500,
-    )
-  }
-  // Huegelkette. Ferne entsteht durch Abstand, nicht durch Groesse - naeher
-  // gesetzt war dieselbe Kette eine gruene Wand hinter dem letzten Haus.
-  for (let i = 0; i < 18; i++) {
-    const t = i / 17
-    const x = -280 + t * 560
-    const z = BAND.hills.from - drift(i) * (BAND.hills.from - BAND.hills.to)
-    backdropHill(b, x, z, 54 + drift(i + 20) * 30, 26 + drift(i + 40) * 20, COLORS.hillNear, i)
-  }
-  // Zweite Kette, hoeher und schon deutlich blauer.
-  for (let i = 0; i < 15; i++) {
-    const t = i / 14
-    const x = -330 + t * 660
-    const z = BAND.ridge.from - drift(i + 60) * (BAND.ridge.from - BAND.ridge.to)
-    backdropHill(b, x, z, 74 + drift(i + 80) * 40, 44 + drift(i + 100) * 26, COLORS.hillMid, i + 60)
-  }
-  // Bergkamm ganz hinten, rund um die Bucht. Zwei versetzte Reihen statt einer:
-  // bei nur einer Reihe schoben die schwankenden Abstaende Luecken auf, durch
-  // die der leere Himmel bis auf die Wasserlinie durchsah.
-  for (const row of [
-    { count: 36, base: 366, seed: 120, height: 44 },
-    { count: 32, base: 424, seed: 400, height: 58 },
-  ]) {
-    for (let i = 0; i < row.count; i++) {
-      const angle = -Math.PI * 0.16 + (i / (row.count - 1)) * Math.PI * 1.32
-      const radius = row.base + drift(i + row.seed) * 34
-      backdropPeak(
-        b,
-        Math.cos(angle) * radius,
-        30 - Math.sin(angle) * radius,
-        64 + drift(i + row.seed + 20) * 44,
-        row.height + drift(i + row.seed + 40) * 42,
-        COLORS.ridgeFar,
-        i + row.seed,
-      )
-    }
-  }
-  // Huegel auf der gegenueberliegenden Kueste, damit die Ringkante nicht als
-  // gerade Linie im Wasser steht.
-  for (let i = 0; i < 14; i++) {
-    const angle = Math.PI * 0.08 + (i / 13) * Math.PI * 0.84
-    const radius = 196 + drift(i + 180) * 26
-    backdropHill(
-      b,
-      Math.cos(angle) * radius,
-      30 + Math.sin(angle) * radius,
-      30 + drift(i + 200) * 20,
-      12 + drift(i + 220) * 14,
-      COLORS.hillMid,
-      i + 180,
-    )
-  }
-
-  /**
-   * Ferne Stadt. Drei Gruppen statt einer gleichmaessigen Reihe - eine Skyline
-   * hat Schwerpunkte, und ein Turm, der aus ihr herausragt, gibt dem Blick
-   * einen Halt. In der Bildreferenz ist das ein schlanker heller Hochhausturm.
-   */
-  const clusters: { x: number; z: number; count: number; peak: number }[] = [
-    { x: -132, z: -196, count: 13, peak: 46 },
-    { x: 58, z: -214, count: 16, peak: 74 },
-    { x: 196, z: 108, count: 11, peak: 38 },
-  ]
-  let seed = 300
-  for (const c of clusters) {
-    for (let i = 0; i < c.count; i++) {
-      seed += 1
-      const dx = (drift(seed) - 0.5) * 88
-      const dz = (drift(seed + 1) - 0.5) * 46
-      // Hohe Haeuser in der Mitte der Gruppe, niedrige am Rand: sonst steht die
-      // Skyline als Zaun aus gleich hohen Latten.
-      const falloff = 1 - Math.min(1, Math.abs(dx) / 46)
-      const height = 14 + falloff * c.peak * (0.55 + drift(seed + 2) * 0.6)
-      const width = 9 + drift(seed + 3) * 12
-      b.box({
-        x: c.x + dx,
-        y: 0,
-        z: c.z + dz,
-        w: width,
-        h: height,
-        d: width * (0.7 + drift(seed + 4) * 0.6),
-        color: drift(seed + 5) > 0.55 ? COLORS.cityFar : COLORS.cityFarShade,
-        collide: false,
-      })
-    }
-    // Ein Turm je Gruppe, deutlich hoeher als der Rest.
+  for (let i = 0; i < steps; i++) {
+    const along = o.dir * (run * i + run / 2)
+    // Die Trittflaeche liegt auf der MITTE der Stufe, nicht an ihrem Ende.
+    // Am Ende gerechnet steht jede Stufe eine volle Stufenhoehe ueber der
+    // gedachten Schraege - der Belag darueber deckt sie dann nicht mehr, und
+    // die Strasse liest als Treppe. So bleibt die Abweichung bei 6 cm nach
+    // oben wie nach unten und verschwindet unter dem Belag.
+    const top = o.y + rise * (i + 0.5)
     b.box({
-      x: c.x + 6,
-      y: 0,
-      z: c.z - 8,
-      w: 11,
-      h: c.peak * 1.7,
-      d: 11,
-      color: COLORS.cityFar,
-      collide: false,
+      x: o.axis === 'x' ? o.x + along : o.x,
+      z: o.axis === 'z' ? o.z + along : o.z,
+      y: floor,
+      h: top - floor,
+      w: o.axis === 'x' ? run : o.width,
+      d: o.axis === 'z' ? run : o.width,
+      color: o.color,
     })
-    b.shape(cone(7.5, 16, 6), COLORS.cityFar, { pos: [c.x + 6, c.peak * 1.7 + 8, c.z - 8] }, { collide: false })
+  }
+
+  // Sichtbelag: eine durchgehende Schraege ueber der Stufenfolge. Ohne sie
+  // liest die Strasse als Treppe - 0,12 m sind im Bild deutlich zu sehen,
+  // auch wenn sie im Gehen nicht zu spueren sind.
+  const angle = Math.atan2(o.rise, length)
+  const midAlong = o.dir * (length / 2)
+  // Der Belag ist dicker als die Stufenhoehe, damit er sie sicher ueberdeckt.
+  const slab = new THREE.BoxGeometry(
+    o.axis === 'x' ? Math.hypot(length, o.rise) : o.width,
+    0.16,
+    o.axis === 'z' ? Math.hypot(length, o.rise) : o.width,
+  )
+  b.shape(
+    slab,
+    o.color,
+    {
+      pos: [
+        o.axis === 'x' ? o.x + midAlong : o.x,
+        o.y + o.rise / 2,
+        o.axis === 'z' ? o.z + midAlong : o.z,
+      ],
+      rot: o.axis === 'x' ? [0, 0, o.dir * angle] : [-o.dir * angle, 0, 0],
+    },
+    { collide: false },
+  )
+
+  return {
+    x: o.axis === 'x' ? o.x + o.dir * length : o.x,
+    z: o.axis === 'z' ? o.z + o.dir * length : o.z,
+    y: o.y + o.rise,
   }
 }
 
 function buildTerrain(b: WorldBuilder): void {
   // Landflaeche, Unterkante tief genug, damit man nicht unter die Stadt faellt.
   b.box({ x: 0, y: -4, z: -13, w: 160, h: 4, d: 94, color: COLORS.paving })
+  // Untere und obere Terrasse der Hangstadt. Beide reichen bis unter die
+  // Altstadtplatte, damit zwischen den Koerpern keine Fuge steht.
+  b.box({
+    x: 0,
+    y: -4,
+    z: (UPPER.lowerFrom + UPPER.upperFrom) / 2,
+    w: 160,
+    h: 4 + UPPER.lowerY,
+    d: UPPER.lowerFrom - UPPER.upperFrom,
+    color: COLORS.paving,
+  })
+  b.box({
+    x: 0,
+    y: -4,
+    z: (UPPER.upperFrom + UPPER.back) / 2,
+    w: 160,
+    h: 4 + UPPER.upperY,
+    d: UPPER.upperFrom - UPPER.back,
+    color: COLORS.paving,
+  })
   // Hafenbecken: Boden liegt 3 m unter Kaikante.
   b.box({ x: 0, y: -6, z: 72, w: 160, h: 3, d: 80, color: COLORS.navyMid })
   // Kaimauer bei z = 34 (Paket: Kaimauer/Wasserkante als 12-m-Modul).
   b.box({ x: 0, y: -3, z: 34.4, w: 160, h: 3, d: 0.8, color: COLORS.concrete })
   // Mole zum Leuchtturm.
   b.box({ x: 42, y: -3, z: 42, w: 14, h: 3, d: 20, color: COLORS.concrete })
+}
+
+/**
+ * Stuetzmauer mit Bruestung an einer Terrassenkante.
+ *
+ * Eine rohe Gelaendekante liest als Kiste. In den Bildreferenzen traegt jede
+ * Hangkante eine Natursteinmauer mit Deckplatte, darueber ein Gelaender - genau
+ * daran erkennt man ueberhaupt, dass da ein Hoehenunterschied ist.
+ */
+export function retainingWall(
+  b: WorldBuilder,
+  o: { x: number; z: number; length: number; top: number; drop: number; railing?: boolean },
+): void {
+  const face = o.top - o.drop
+  b.box({ x: o.x, y: face, z: o.z, w: o.length, h: o.drop, d: 0.6, color: COLORS.stoneShade, collide: false })
+  // Deckplatte mit Ueberstand: die Schattenkante darunter macht die Mauer.
+  b.box({ x: o.x, y: o.top - 0.28, z: o.z, w: o.length, h: 0.28, d: 1.0, color: COLORS.stone, collide: false })
+  // Blendarkade - waagerechte Fugen statt einer glatten Wand.
+  const bands = Math.max(1, Math.floor(o.drop / 1.1))
+  for (let i = 1; i < bands; i++) {
+    b.box({
+      x: o.x,
+      y: face + (i * o.drop) / bands,
+      z: o.z + 0.02,
+      w: o.length,
+      h: 0.1,
+      d: 0.7,
+      color: COLORS.stone,
+      collide: false,
+    })
+  }
+  if (o.railing !== false) {
+    b.railing({ x: o.x, z: o.z, y: o.top, length: o.length, axis: 'x', color: COLORS.iron, tag: 'nocam' })
+  }
+}
+
+/**
+ * Hangstadt im Norden - zwei Terrassen ueber der Altstadt.
+ *
+ * Erschlossen wird sie so, wie eine echte Hangstadt es tut: ueber Strassen, die
+ * selbst steigen. Damit ist die Barrierefreiheit im Wegenetz enthalten und
+ * braucht keinen eigenen Rampenturm; die Freitreppen an den Flanken sind
+ * Abkuerzungen, nicht der einzige Weg.
+ */
+function buildUpperTown(b: WorldBuilder): void {
+  const lower = UPPER.lowerY
+  const upper = UPPER.upperY
+
+  // --- Kanten -------------------------------------------------------------
+  // Vorderkante der unteren Terrasse. Zwischen x 1 und 54 liegt die
+  // Rampenstrasse davor, dort waere die Mauer im Weg.
+  for (const [x, len] of [[-42, 76], [66, 28]] as [number, number][]) {
+    retainingWall(b, { x, z: UPPER.lowerFrom, length: len, top: lower, drop: lower })
+  }
+  // Vorderkante der oberen Terrasse: hier steht die Aussichtsbruestung ueber
+  // die volle Breite. Sie ist der Punkt, fuer den die ganze Staffelung gebaut
+  // ist - von hier sieht man ueber die Altstadt hinweg bis aufs Wasser.
+  retainingWall(b, {
+    x: 0,
+    z: UPPER.upperFrom,
+    length: 160,
+    top: upper,
+    drop: upper - lower,
+    railing: false,
+  })
+  b.railing({ x: -50, z: UPPER.upperFrom + 0.6, y: upper, length: 58, axis: 'x', color: COLORS.iron, tag: 'nocam' })
+  b.railing({ x: 50, z: UPPER.upperFrom + 0.6, y: upper, length: 58, axis: 'x', color: COLORS.iron, tag: 'nocam' })
+  // In der Sichtschneise bleibt die Bruestung niedrig und ohne Pfosten - ein
+  // Gelaender auf 1,1 m schneidet genau durch die Dachlinie, auf die man sieht.
+  b.box({ x: 0, y: upper, z: UPPER.upperFrom + 0.6, w: 42, h: 0.62, d: 0.34, color: COLORS.stone })
+
+  // --- Erschliessung ------------------------------------------------------
+  // Rampenstrasse Ost: von der Altstadt (y 0, x 54) nach Westen auf die untere
+  // Terrasse. 53 m auf 3,2 m sind 6 Prozent.
+  rampRoad(b, {
+    x: 54,
+    z: UPPER.lowerFrom + 3,
+    y: 0,
+    width: 6,
+    rise: lower,
+    axis: 'x',
+    dir: -1,
+    color: COLORS.asphalt,
+    baseY: -1,
+  })
+  // Gehweg und Bordstein laengs der Rampe, auf derselben Schraege.
+  rampRoad(b, {
+    x: 54,
+    z: UPPER.lowerFrom + 6.8,
+    y: CURB_HEIGHT,
+    width: 2,
+    rise: lower,
+    axis: 'x',
+    dir: -1,
+    color: COLORS.concrete,
+    baseY: -1,
+  })
+
+  // Rampenstrasse West: von der unteren Terrasse (x -58) nach Osten hinauf auf
+  // die obere. 105 m auf 6,4 m sind 6,1 Prozent.
+  rampRoad(b, {
+    x: -58,
+    z: UPPER.upperFrom + 3,
+    y: lower,
+    width: 6,
+    rise: upper - lower,
+    axis: 'x',
+    dir: 1,
+    color: COLORS.asphalt,
+    baseY: lower - 0.4,
+  })
+  rampRoad(b, {
+    x: -58,
+    z: UPPER.upperFrom + 6.8,
+    y: lower + CURB_HEIGHT,
+    width: 2,
+    rise: upper - lower,
+    axis: 'x',
+    dir: 1,
+    color: COLORS.concrete,
+    baseY: lower - 0.4,
+  })
+
+  // Freitreppe von der Altstadt auf die untere Terrasse, in der Sichtschneise.
+  b.stairs({ x: -12, y: 0, z: UPPER.lowerFrom, width: 6, steps: 20, color: COLORS.concrete, dir: 'north' })
+  stairDressing(b, { x: -12, y: 0, z: UPPER.lowerFrom, width: 6, steps: 20, dir: 'north' })
+  // Freitreppen an den Flanken auf die obere Terrasse - dort laeuft die
+  // Rampenstrasse nicht mehr.
+  for (const x of [-68, 58]) {
+    b.stairs({ x, y: lower, z: UPPER.upperFrom, width: 4, steps: 40, color: COLORS.concrete, dir: 'north' })
+    stairDressing(b, { x, y: lower, z: UPPER.upperFrom, width: 4, steps: 40, dir: 'north' })
+  }
+
+  // --- Flaechen und Bebauung ----------------------------------------------
+  // Terrassenstrassen. Sie liegen 1 cm ueber dem Gelaende, sonst blendet der
+  // Asphalt gegen die Terrassenoberflaeche weg - derselbe Fall wie 08/2026 auf
+  // der Hauptstrasse.
+  b.box({ x: 0, y: lower, z: -64, w: 160, h: 0.01, d: 6, color: COLORS.asphalt, collide: false })
+  b.box({ x: 0, y: upper, z: -99, w: 160, h: 0.01, d: 6, color: COLORS.asphalt, collide: false })
+  /**
+   * Gehwege und Plaetze der beiden Terrassen. Die Tiefen sind an die
+   * Haeuserzeilen angepasst, nicht gerundet: die untere Zeile steht bei
+   * z -60..-48, die obere bei -90..-78 und -104..-96. Ein Gehweg, der in eine
+   * Hauswand laeuft, ist im Bild nicht zu sehen - im Gehen schon.
+   */
+  for (const [y, z, depth] of [
+    [lower, -47, 2],
+    [lower, -60.6, 1.2],
+    [upper, -78, 12],
+    [upper, -96.6, 1.2],
+    [upper, -101.4, 1.2],
+  ] as [number, number, number][]) {
+    b.box({ x: 0, y, z, w: 160, h: CURB_HEIGHT, d: depth, color: COLORS.concrete })
+    paveJoints(b, { x: 0, z, w: 160, d: depth, y: y + CURB_HEIGHT, spacing: 1.5 })
+  }
+
+  /**
+   * Die Haeuser der Hangstadt.
+   *
+   * Geschosszahlen zwischen 3 und 5 - in der Altstadt sind alle Bloecke
+   * zweigeschossig, und genau deshalb liegt ihre Dachlinie ueber die ganze
+   * Stadt fast waagerecht. Block A, B und C bleiben unveraendert: die
+   * Parkourroute legt ihre Dachbruecke auf `a.height` und ihre Sprungluecke
+   * zwischen `bb.height` und `c.height`.
+   */
+  const blocks: {
+    x0: number
+    z0: number
+    w: number
+    d: number
+    floors: number
+    y: number
+    color: string
+    shop: boolean
+  }[] = []
+  const walls = [COLORS.wallCream, COLORS.wallCoral, COLORS.wallCream, COLORS.groundTeal]
+  let seed = 900
+  for (const [rowY, z0, depth] of [
+    [lower, -60, 12],
+    [upper, -96, 12],
+    [upper, -112, 10],
+  ] as [number, number, number][]) {
+    for (let x0 = -76; x0 <= 64; x0 += 15) {
+      seed += 1
+      // Gassen: einzelne Felder bleiben frei, sonst steht dort eine Mauer.
+      if (drift(seed) < 0.16) continue
+      const w = 11 + Math.round(drift(seed + 1) * 2)
+      // Sichtschneise freihalten - siehe UPPER.vistaX.
+      if (rowY === lower && x0 + w > -UPPER.vistaX && x0 < UPPER.vistaX) continue
+      blocks.push({
+        x0,
+        z0,
+        d: depth,
+        w,
+        floors: 3 + Math.floor(drift(seed + 2) * 3),
+        y: rowY,
+        color: walls[Math.floor(drift(seed + 3) * walls.length) % walls.length],
+        shop: rowY === lower,
+      })
+    }
+  }
+  for (const block of blocks) {
+    buildFacadeBuilding(b, {
+      x0: block.x0,
+      z0: block.z0,
+      w: block.w,
+      d: block.d,
+      floors: block.floors,
+      wallColor: block.color,
+      shopFront: block.shop,
+      baseY: block.y,
+    })
+  }
+
+  // Baeume auf beiden Terrassen. In der Sichtschneise stehen sie am Rand,
+  // damit sie den Blick rahmen statt ihn zuzustellen.
+  let treeSeed = 60
+  for (let x = -70; x <= 70; x += 10) {
+    plantedTree(b, x, -47.6, treeSeed++, undefined, lower)
+    if (Math.abs(x) > UPPER.vistaX) blossomTree(b, x, -74.4, treeSeed++, upper)
+  }
+
+  /**
+   * Moeblierung der Aussichtsterrasse.
+   *
+   * Ohne sie ist die obere Terrasse eine leere Pflasterflaeche, die im Bild
+   * die halbe Hoehe einnimmt - genau der Eindruck "eckige leere Welt". In den
+   * Bildreferenzen steht im Vordergrund immer etwas: Beete, Baenke, Laternen.
+   * Die Sichtschneise bleibt frei von allem, was hoeher als eine Bank ist.
+   */
+  for (let x = -76; x <= 76; x += 12) {
+    streetLamp(b, x, UPPER.upperFrom + 2.4, upper)
+    streetLamp(b, x + 6, UPPER.lowerFrom + 4.6, lower)
+  }
+  for (const x of [-34, -26, 26, 34, -10, 10]) {
+    bench(b, x, UPPER.upperFrom + 4.2, upper)
+  }
+  // Blumenkuebel entlang der Bruestung, im Wechsel mit den Baenken.
+  for (let x = -72; x <= 72; x += 8) {
+    b.shape(
+      cylinder(0.72, 0.78, 0.62, 12),
+      COLORS.stoneShade,
+      { pos: [x, upper + CURB_HEIGHT + 0.31, UPPER.upperFrom + 1.5] },
+      { collide: true, tag: 'nocam' },
+    )
+    for (let i = 0; i < 5; i++) {
+      const a = i * 1.4 + x * 0.3
+      b.shape(sphere(0.3, 7, 5), i % 2 ? COLORS.bloom : COLORS.gold, {
+        pos: [
+          x + Math.cos(a) * 0.34,
+          upper + CURB_HEIGHT + 0.72,
+          UPPER.upperFrom + 1.5 + Math.sin(a) * 0.34,
+        ],
+        scale: [1, 0.75, 1],
+      })
+    }
+  }
 }
 
 function buildRoads(b: WorldBuilder): void {
@@ -622,22 +745,23 @@ function buildRoads(b: WorldBuilder): void {
  * Sitzhoehe und Lehnenlage bleiben unveraendert, `AmbientNPCSystem` setzt seine
  * Figuren darauf.
  */
-function bench(b: WorldBuilder, x: number, z: number): void {
+function bench(b: WorldBuilder, x: number, z: number, baseY = 0): void {
   const width = 1.8
-  const seatTop = BENCH_SEAT_Y
+  const seatTop = baseY + BENCH_SEAT_Y
   // Die Kollision kommt als reine Box dazu, ohne Geometrie. Ein sichtbarer
   // Traeger in voller Groesse haette hinter den Latten gestanden und genau die
   // Luecken wieder zugemacht, die die Bank erst zur Bank machen.
   b.collisionAdd(
     new THREE.Box3(
-      new THREE.Vector3(x - width / 2, CURB_HEIGHT, z - 0.3),
+      new THREE.Vector3(x - width / 2, baseY + CURB_HEIGHT, z - 0.3),
       new THREE.Vector3(x + width / 2, seatTop, z + 0.3),
     ),
+    'nocam',
   )
   // Wangen aus Gusseisen, links und rechts leicht eingerueckt.
   for (const side of [-1, 1]) {
     const wx = x + side * (width / 2 - 0.12)
-    b.box({ x: wx, y: CURB_HEIGHT, z, w: 0.09, h: seatTop - CURB_HEIGHT, d: 0.62, color: COLORS.iron, collide: false })
+    b.box({ x: wx, y: baseY + CURB_HEIGHT, z, w: 0.09, h: seatTop - baseY - CURB_HEIGHT, d: 0.62, color: COLORS.iron, collide: false })
     // Lehnenpfosten, nach hinten geneigt angedeutet ueber zwei Stufen.
     b.box({ x: wx, y: seatTop, z: z - 0.22, w: 0.08, h: 0.5, d: 0.09, color: COLORS.iron, collide: false })
   }
@@ -900,7 +1024,7 @@ function buildFacadeBuilding(
   b: WorldBuilder,
   options: BuildingOptions,
 ): { x0: number; z0: number; w: number; d: number; height: number } {
-  const { x0, z0, w, d, wallColor, shopFront = false } = options
+  const { x0, z0, w, d, wallColor, shopFront = false, baseY = 0 } = options
   const height = buildingHeight(options)
   const groundHeight = shopFront ? SHOP_FLOOR_HEIGHT : FLOOR_HEIGHT
   const cx = x0 + w / 2
@@ -909,11 +1033,17 @@ function buildFacadeBuilding(
   // Ein solider Collider statt vier Waenden: das Haus ist nicht begehbar,
   // das Dach traegt trotzdem.
   b.collisionAdd(
-    new THREE.Box3(new THREE.Vector3(x0, 0, z0), new THREE.Vector3(x0 + w, height, z0 + d)),
+    new THREE.Box3(
+      new THREE.Vector3(x0, baseY, z0),
+      new THREE.Vector3(x0 + w, baseY + height, z0 + d),
+    ),
   )
 
+  // Alle Bauteile werden ueber diesen einen Helfer gesetzt; er traegt die
+  // Standflaeche. Wer daran vorbei direkt `b.box()` ruft, muss `baseY` selbst
+  // addieren - das betrifft nur Dachplatte, Blumenkaesten und Balkongelaender.
   const wall = (x: number, y: number, z: number, ww: number, hh: number, dd: number, color: string) =>
-    b.box({ x, y, z, w: ww, h: hh, d: dd, color, collide: false })
+    b.box({ x, y: y + baseY, z, w: ww, h: hh, d: dd, color, collide: false })
 
   // Erdgeschoss ringsum in Teal (Paket: Erdgeschoss_Teal).
   wall(cx, 0, z0 + 0.125, w, groundHeight, 0.25, COLORS.groundTeal)
@@ -1007,7 +1137,7 @@ function buildFacadeBuilding(
       // Blumenkasten auf der Bank der Strassenseite. In den Referenzen traegt
       // fast jede Fensterbank einen - das ist der Unterschied zwischen
       // bewohnter Fassade und Fassadenmodul.
-      windowBox(b, x, y - 0.18, z0 + d + 0.16, 1.3, 'x', c + r * 3)
+      windowBox(b, x, y - 0.18 + baseY, z0 + d + 0.16, 1.3, 'x', c + r * 3)
     }
   }
   const depthColumns = Math.floor(d / FACADE_MODULE)
@@ -1035,9 +1165,9 @@ function buildFacadeBuilding(
         const bx = bayX + side * 3.2
         if (bx < x0 + 1 || bx > x0 + w - 1) continue
         wall(bx, y + 0.55, frontZ + 0.55, 2.6, 0.18, 1.1, COLORS.stone)
-        b.railing({ x: bx, z: frontZ + 1.05, y: y + 0.73, length: 2.6, axis: 'x', color: COLORS.iron, collide: false })
+        b.railing({ x: bx, z: frontZ + 1.05, y: y + 0.73 + baseY, length: 2.6, axis: 'x', color: COLORS.iron, collide: false })
         for (const rail of [-1, 1]) {
-          b.railing({ x: bx + rail * 1.25, z: frontZ + 0.6, y: y + 0.73, length: 1.0, axis: 'z', color: COLORS.iron, collide: false })
+          b.railing({ x: bx + rail * 1.25, z: frontZ + 0.6, y: y + 0.73 + baseY, length: 1.0, axis: 'z', color: COLORS.iron, collide: false })
         }
       }
     }
@@ -1062,15 +1192,17 @@ function buildFacadeBuilding(
   wall(doorX, 0, frontZ - 0.02, 1.0, 2.2, 0.1, COLORS.wood)
 
   // Dachplatte, Gesims und Bruestung 1,1 m.
-  b.box({ x: cx, y: height, z: cz, w: w + 0.4, h: 0.3, d: d + 0.4, color: COLORS.roof })
-  const roofTop = height + 0.3
+  b.box({ x: cx, y: baseY + height, z: cz, w: w + 0.4, h: 0.3, d: d + 0.4, color: COLORS.roof })
+  // Ab hier absolut: `roofTop` wird auch nach aussen gereicht, und die
+  // Parkourroute legt ihre Bruecke auf diesen Wert.
+  const roofTop = baseY + height + 0.3
   // Auf Parkourdaechern bleibt die Bruestung sichtbar, aber durchlaessig -
   // sonst waeren Aufstieg, Dachbruecke und Sprung blockiert.
   const solid = !options.roofAccessible
-  b.railing({ x: cx, z: z0 + 0.1, y: roofTop, length: w, axis: 'x', color: COLORS.metal, collide: solid })
-  b.railing({ x: cx, z: z0 + d - 0.1, y: roofTop, length: w, axis: 'x', color: COLORS.metal, collide: solid })
-  b.railing({ x: x0 + 0.1, z: cz, y: roofTop, length: d, axis: 'z', color: COLORS.metal, collide: solid })
-  b.railing({ x: x0 + w - 0.1, z: cz, y: roofTop, length: d, axis: 'z', color: COLORS.metal, collide: solid })
+  b.railing({ x: cx, z: z0 + 0.1, y: roofTop, length: w, axis: 'x', color: COLORS.metal, collide: solid, tag: 'nocam' })
+  b.railing({ x: cx, z: z0 + d - 0.1, y: roofTop, length: w, axis: 'x', color: COLORS.metal, collide: solid, tag: 'nocam' })
+  b.railing({ x: x0 + 0.1, z: cz, y: roofTop, length: d, axis: 'z', color: COLORS.metal, collide: solid, tag: 'nocam' })
+  b.railing({ x: x0 + w - 0.1, z: cz, y: roofTop, length: d, axis: 'z', color: COLORS.metal, collide: solid, tag: 'nocam' })
   // Dachaufbau als Landmarke.
   b.box({ x: cx - 2, y: roofTop, z: cz - 3, w: 2.4, h: 1.6, d: 2.4, color: COLORS.metal })
   // Dachgarten nach 11_Modulare_Bausaetze/04_Dachmodule: Schornstein, Pergola
@@ -1449,7 +1581,7 @@ function buildClockPavilion(b: WorldBuilder): void {
  * mit eigener Box haette den 1,8 m breiten Lauf verengt und die barrierearme
  * Alternative der Parkourroute unbegehbar gemacht.
  */
-function stairDressing(
+export function stairDressing(
   b: WorldBuilder,
   opts: {
     x: number
@@ -1782,8 +1914,8 @@ function buildPromenade(b: WorldBuilder): void {
   // Das Hafengelaender laesst an der Wassertaxi-Station eine 6 m breite Durchfahrt
   // frei - sonst waeren Dock, Werftstege und alle Wasserfahrzeuge zu Fuss
   // unerreichbar und nur per Teleport zu bespielen.
-  b.railing({ x: -26.5, z: 32.2, y: CURB_HEIGHT, length: 67, axis: 'x', color: COLORS.metal })
-  b.railing({ x: 36.5, z: 32.2, y: CURB_HEIGHT, length: 47, axis: 'x', color: COLORS.metal })
+  b.railing({ x: -26.5, z: 32.2, y: CURB_HEIGHT, length: 67, axis: 'x', color: COLORS.metal, tag: 'nocam' })
+  b.railing({ x: 36.5, z: 32.2, y: CURB_HEIGHT, length: 47, axis: 'x', color: COLORS.metal, tag: 'nocam' })
   for (let x = -50; x <= 50; x += 10) {
     b.box({ x, y: CURB_HEIGHT, z: 26.6, w: 0.3, h: 3.2, d: 0.3, color: COLORS.metal })
     b.box({ x, y: 3.35 + CURB_HEIGHT, z: 26.6, w: 0.9, h: 0.25, d: 0.5, color: COLORS.gold, collide: false })
@@ -1956,7 +2088,7 @@ function buildWaterTaxiStation(b: WorldBuilder): void {
   b.box({ x, y: 4.5, z: 30, w: 12.6, h: 0.4, d: 8.6, color: COLORS.cyan })
   // Schwimmendes Dock 8 x 7,5 m, Oberkante auf Promenadenniveau.
   b.box({ x, y: -0.45, z: 37.75, w: 8, h: 0.6, d: 7.5, color: COLORS.wood })
-  b.railing({ x, z: 41.3, y: 0.15, length: 8, axis: 'x', color: COLORS.metal })
+  b.railing({ x, z: 41.3, y: 0.15, length: 8, axis: 'x', color: COLORS.metal, tag: 'nocam' })
   b.box({ x: x - 3, y: 0.15, z: 36, w: 0.4, h: 1.2, d: 0.4, color: COLORS.coral })
 }
 
@@ -1972,7 +2104,7 @@ function buildHarborDocks(b: WorldBuilder, scene: THREE.Scene): THREE.Group {
   b.box({ x: -5, y: top, z: 37.5, w: 22, h: thickness, d: 3, color: COLORS.wood })
   // Flugsteg-Ponton, Nordkante bei z = 44: davor liegt das Skyfin.
   b.box({ x: -12, y: top, z: 41.5, w: 10, h: thickness, d: 5, color: COLORS.wood })
-  b.railing({ x: -16.9, z: 41.5, y: 0.15, length: 5, axis: 'z', color: COLORS.metal })
+  b.railing({ x: -16.9, z: 41.5, y: 0.15, length: 5, axis: 'z', color: COLORS.metal, tag: 'nocam' })
   // Windsack als Landmarke fuer den Anflug. Der Mast bleibt statisch, der Sack
   // wird eine eigene Gruppe - er soll sich in den Wind drehen.
   b.box({ x: -16.4, y: 0.15, z: 39.6, w: 0.25, h: 4.2, d: 0.25, color: COLORS.metal })
@@ -1983,8 +2115,8 @@ function buildHarborDocks(b: WorldBuilder, scene: THREE.Scene): THREE.Group {
   const windsock = buildWindsock(scene, -16.4, 4.25, 39.6)
   // Tauchbecken-Ponton, Ostkante bei x = 5: daneben liegt der Scout.
   b.box({ x: 0.5, y: top, z: 42, w: 9, h: thickness, d: 6, color: COLORS.wood })
-  b.railing({ x: 0.5, z: 44.9, y: 0.15, length: 9, axis: 'x', color: COLORS.metal })
-  b.railing({ x: -3.9, z: 42, y: 0.15, length: 6, axis: 'z', color: COLORS.metal })
+  b.railing({ x: 0.5, z: 44.9, y: 0.15, length: 9, axis: 'x', color: COLORS.metal, tag: 'nocam' })
+  b.railing({ x: -3.9, z: 42, y: 0.15, length: 6, axis: 'z', color: COLORS.metal, tag: 'nocam' })
   // Poller und Geraeteschuppen der Werft.
   for (const [px, pz] of [
     [-7.4, 39.6],
@@ -2068,12 +2200,12 @@ function buildResearchPlatform(b: WorldBuilder): { x: number; z: number; deck: n
     b.box({ x: x + dx, y: -3, z: z + dz, w: 0.6, h: 3.6, d: 0.6, color: COLORS.metal, collide: false })
   }
   b.box({ x, y: deck - 0.3, z, w: 12, h: 0.3, d: 12, color: COLORS.wood })
-  b.railing({ x, z: z + 5.9, y: deck, length: 12, axis: 'x', color: COLORS.metal })
-  b.railing({ x, z: z - 5.9, y: deck, length: 12, axis: 'x', color: COLORS.metal })
-  b.railing({ x: x + 5.9, z, y: deck, length: 12, axis: 'z', color: COLORS.metal })
+  b.railing({ x, z: z + 5.9, y: deck, length: 12, axis: 'x', color: COLORS.metal, tag: 'nocam' })
+  b.railing({ x, z: z - 5.9, y: deck, length: 12, axis: 'x', color: COLORS.metal, tag: 'nocam' })
+  b.railing({ x: x + 5.9, z, y: deck, length: 12, axis: 'z', color: COLORS.metal, tag: 'nocam' })
   // Backbordseite bleibt offen: dort legt das Wassertaxi an.
-  b.railing({ x: x - 5.9, z: z + 4, y: deck, length: 3.6, axis: 'z', color: COLORS.metal })
-  b.railing({ x: x - 5.9, z: z - 4, y: deck, length: 3.6, axis: 'z', color: COLORS.metal })
+  b.railing({ x: x - 5.9, z: z + 4, y: deck, length: 3.6, axis: 'z', color: COLORS.metal, tag: 'nocam' })
+  b.railing({ x: x - 5.9, z: z - 4, y: deck, length: 3.6, axis: 'z', color: COLORS.metal, tag: 'nocam' })
 
   // Messhuette und Sonarmast.
   b.box({ x: x + 3, y: deck, z: z - 3, w: 4, h: 2.8, d: 4, color: COLORS.cream })
@@ -2088,10 +2220,20 @@ function buildResearchPlatform(b: WorldBuilder): { x: number; z: number; deck: n
 }
 
 /** Strassenlaterne: Sockel und Mast tragen, Ausleger und Leuchte nicht. */
-function streetLamp(b: WorldBuilder, x: number, z: number): void {
-  const base = CURB_HEIGHT
-  b.box({ x, y: base, z, w: 0.34, h: 0.3, d: 0.34, color: COLORS.navy })
-  b.box({ x, y: base + 0.3, z, w: 0.16, h: 3.5, d: 0.16, color: COLORS.navy })
+/**
+ * Strassenlaterne.
+ *
+ * Der Mast traegt den Tag `nocam`. Er ist 16 cm dick und steht am Gehwegrand -
+ * genau dort, wo die Verfolgerkamera hinter der Figur liegt. Ohne den Tag zieht
+ * `rayHitDistance()` die Kamera bis auf 1,1 m an die Figur heran, sobald ein
+ * Mast dahinter steht: das Bild klebt der Figur im Gesicht, und die Stadt sieht
+ * eng aus, ohne dass eine Wand naeher stuende. Bewegung blockiert der Mast
+ * weiterhin - `moveAndSlide()` wertet den Tag nicht aus.
+ */
+function streetLamp(b: WorldBuilder, x: number, z: number, baseY = 0): void {
+  const base = baseY + CURB_HEIGHT
+  b.box({ x, y: base, z, w: 0.34, h: 0.3, d: 0.34, color: COLORS.navy, tag: 'nocam' })
+  b.box({ x, y: base + 0.3, z, w: 0.16, h: 3.5, d: 0.16, color: COLORS.navy, tag: 'nocam' })
   b.box({ x, y: base + 3.8, z, w: 0.46, h: 0.1, d: 0.46, color: COLORS.navy, collide: false })
   b.box({ x, y: base + 3.9, z, w: 0.36, h: 0.32, d: 0.36, color: COLORS.gold, collide: false })
   b.box({ x, y: base + 4.22, z, w: 0.44, h: 0.1, d: 0.44, color: COLORS.navy, collide: false })
@@ -2127,13 +2269,13 @@ function buildWindsock(scene: THREE.Scene, x: number, y: number, z: number): THR
  *
  * Nur der Randstein traegt Kollision; Erde, Blueten und Krone sind Kulisse.
  */
-function plantingBed(b: WorldBuilder, x: number, z: number, radius = 0.8): number {
-  const base = CURB_HEIGHT
+function plantingBed(b: WorldBuilder, x: number, z: number, radius = 0.8, baseY = 0): number {
+  const base = baseY + CURB_HEIGHT
   b.shape(
     cylinder(radius, radius + 0.04, 0.34, 10),
     COLORS.stoneShade,
     { pos: [x, base + 0.17, z] },
-    { collide: true },
+    { collide: true, tag: 'nocam' },
   )
   b.shape(cylinder(radius - 0.1, radius - 0.1, 0.1, 10), COLORS.barkDark, {
     pos: [x, base + 0.36, z],
@@ -2245,14 +2387,16 @@ function plantedTree(
   z: number,
   seed = 0,
   sway?: { scene: THREE.Scene; out: THREE.Group[] },
+  /** Standflaeche - auf den Terrassen der Hangstadt liegt sie ueber y = 0. */
+  baseY = 0,
 ): void {
-  const top = plantingBed(b, x, z)
+  const top = plantingBed(b, x, z, 0.8, baseY)
   const trunkH = 2.4
   b.shape(
     cylinder(0.15, 0.24, trunkH, 8),
     COLORS.barkPale,
     { pos: [x, top + trunkH / 2, z] },
-    { collide: true },
+    { collide: true, tag: 'nocam' },
   )
   // Zwei Astansaetze in die Krone - ohne sie schwebt die Krone auf einem Stab.
   for (const side of [-1, 1]) {
@@ -2275,14 +2419,14 @@ function plantedTree(
  * Bluetenbaum nach 03_Bluetenbaum: schlanker dunkler Stamm, lockere Krone,
  * rosa Bluetenballen zwischen dem Laub.
  */
-function blossomTree(b: WorldBuilder, x: number, z: number, seed = 0): void {
-  const top = plantingBed(b, x, z, 0.7)
+function blossomTree(b: WorldBuilder, x: number, z: number, seed = 0, baseY = 0): void {
+  const top = plantingBed(b, x, z, 0.7, baseY)
   const trunkH = 2.0
   b.shape(
     cylinder(0.11, 0.18, trunkH, 7),
     COLORS.barkDark,
     { pos: [x, top + trunkH / 2, z] },
-    { collide: true },
+    { collide: true, tag: 'nocam' },
   )
   for (const side of [-1, 1]) {
     b.shape(cylinder(0.06, 0.1, 1.2, 5), COLORS.barkDark, {
@@ -2343,7 +2487,7 @@ function fanPalm(b: WorldBuilder, x: number, z: number, seed = 0): void {
     cylinder(0.24, 0.44, trunkH, 8),
     COLORS.barkDark,
     { pos: [x, top + trunkH / 2, z] },
-    { collide: true },
+    { collide: true, tag: 'nocam' },
   )
   // Schuppenkranz: der Stamm einer Palme ist nie glatt.
   for (let i = 0; i < 5; i++) {
@@ -2504,7 +2648,7 @@ function bicycle(b: WorldBuilder, x: number, z: number, rot: number): void {
 function cafeSet(b: WorldBuilder, x: number, z: number, seed: number): void {
   const y = CURB_HEIGHT
   const turn = drift(seed) * Math.PI
-  b.shape(cylinder(0.07, 0.07, 0.68, 8), COLORS.iron, { pos: [x, y + 0.34, z] }, { collide: true })
+  b.shape(cylinder(0.07, 0.07, 0.68, 8), COLORS.iron, { pos: [x, y + 0.34, z] }, { collide: true, tag: 'nocam' })
   b.shape(cylinder(0.42, 0.42, 0.06, 14), COLORS.cream, { pos: [x, y + 0.71, z] }, { collide: false })
   b.shape(cylinder(0.28, 0.3, 0.04, 10), COLORS.iron, { pos: [x, y + 0.02, z] }, { collide: false })
   for (const side of [-1, 1]) {
@@ -2561,7 +2705,7 @@ function wareCrates(b: WorldBuilder, x: number, z: number, seed: number): void {
     const cx = x + dx
     const cz = z + dz
     const turn = (drift(seed + n) - 0.5) * 0.7
-    b.box({ x: cx, y, z: cz, w: 0.56, h, d: 0.5, color: COLORS.wood, rotY: turn, collide: n === 0 })
+    b.box({ x: cx, y, z: cz, w: 0.56, h, d: 0.5, color: COLORS.wood, rotY: turn, collide: n === 0, tag: 'nocam' })
     // Inhalt: drei Ballen, die ueber den Rand schauen.
     for (let i = 0; i < 3; i++) {
       const a = drift(seed + n * 3 + i) * Math.PI * 2
@@ -2577,7 +2721,7 @@ function wareCrates(b: WorldBuilder, x: number, z: number, seed: number): void {
 /** Abfallkorb und Aufsteller - stehen zusammen an den Laternen. */
 function binAndSign(b: WorldBuilder, x: number, z: number, seed: number): void {
   const y = CURB_HEIGHT
-  b.shape(cylinder(0.24, 0.2, 0.72, 10), COLORS.iron, { pos: [x, y + 0.36, z] }, { collide: true })
+  b.shape(cylinder(0.24, 0.2, 0.72, 10), COLORS.iron, { pos: [x, y + 0.36, z] }, { collide: true, tag: 'nocam' })
   b.shape(torus(0.25, 0.03, 6, 12), COLORS.metal, { pos: [x, y + 0.72, z], rot: [Math.PI / 2, 0, 0] }, { collide: false })
   // Klappaufsteller: zwei geneigte Tafeln, oben zusammenlaufend.
   const turn = drift(seed) * Math.PI
@@ -2634,7 +2778,7 @@ function buildStreetDressing(b: WorldBuilder, sway: { scene: THREE.Scene; out: T
   // Bluetenkuebel jetzt an der Wasserseite - auf 30,8 m stuenden sie in der
   // dichteren Baumreihe.
   for (let x = -37.5; x <= 37.5; x += 15) {
-    b.shape(cylinder(0.72, 0.78, 0.62, 12), COLORS.stoneShade, { pos: [x, CURB_HEIGHT + 0.31, 32.4] }, { collide: true })
+    b.shape(cylinder(0.72, 0.78, 0.62, 12), COLORS.stoneShade, { pos: [x, CURB_HEIGHT + 0.31, 32.4] }, { collide: true, tag: 'nocam' })
     for (let i = 0; i < 5; i++) {
       const a = i * 1.4 + x * 0.3
       b.shape(sphere(0.3, 7, 5), i % 2 ? COLORS.bloom : COLORS.gold, {
@@ -2713,7 +2857,7 @@ function buildStreetDressing(b: WorldBuilder, sway: { scene: THREE.Scene; out: T
     binAndSign(b, x, -6.6, seed)
   }
   for (const x of [-22, -10, 6, 22]) {
-    b.shape(cylinder(0.6, 0.66, 0.56, 12), COLORS.stoneShade, { pos: [x, CURB_HEIGHT + 0.28, -6.4] }, { collide: true })
+    b.shape(cylinder(0.6, 0.66, 0.56, 12), COLORS.stoneShade, { pos: [x, CURB_HEIGHT + 0.28, -6.4] }, { collide: true, tag: 'nocam' })
     for (let i = 0; i < 4; i++) {
       const a = i * 1.6 + x * 0.4
       b.shape(sphere(0.26, 7, 5), i % 2 ? COLORS.foliage : COLORS.bloom, {

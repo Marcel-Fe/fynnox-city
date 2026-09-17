@@ -6,6 +6,7 @@ import { buildDistrict, type DistrictAnchors } from '../world/District'
 import { Water } from '../world/Water'
 import { SkySystem } from '../world/Sky'
 import { AmbientMotion } from '../world/AmbientMotion'
+import { ChunkLod } from '../world/ChunkLod'
 import { PlayerController } from '../player/PlayerController'
 import type { FigureLoad } from '../player/loadFynnox'
 import { OrbitCameraRig } from '../camera/OrbitCameraRig'
@@ -55,6 +56,7 @@ export class Game {
   private readonly water: Water
   private readonly sky: SkySystem
   private readonly motion: AmbientMotion
+  private readonly lod: ChunkLod
   private readonly rig: OrbitCameraRig
   private readonly player: PlayerController
   private readonly vehicle: CitySpark
@@ -99,13 +101,17 @@ export class Game {
     // stehen. Fuer Teal, Koralle und Orange ist der Unterschied deutlich.
     this.renderer.toneMapping = THREE.NeutralToneMapping
     this.renderer.toneMappingExposure = 1.1
+    // Zaehlt Draw-Calls ueber ALLE Passes eines Bildes. Mit dem automatischen
+    // Ruecksetzen stuende im Zustand nur der letzte Nachbearbeitungspass.
+    this.renderer.info.autoReset = false
     this.renderer.domElement.className = 'scene'
     container.appendChild(this.renderer.domElement)
 
     this.input = new InputManager(this.renderer.domElement)
     this.rig = new OrbitCameraRig(this.collision)
-    this.sky = new SkySystem(this.scene)
+    this.sky = new SkySystem(this.scene, this.renderer)
     this.anchors = buildDistrict(this.scene, this.collision)
+    this.lod = new ChunkLod(this.anchors.nearChunks)
     this.water = new Water(this.scene)
     this.motion = new AmbientMotion(this.scene, this.anchors.motion, this.anchors.basin)
 
@@ -227,6 +233,7 @@ export class Game {
     this.resize()
     window.addEventListener('resize', () => this.resize())
     this.refreshWallet()
+    this.hud.setCityMap(this.anchors.city)
     this.hud.setMission(this.mission.info.title, this.mission.info.objective, this.mission.info.hint)
   }
 
@@ -279,6 +286,32 @@ export class Game {
         this.post.setEnabled(high)
       },
       postEnabled: () => this.post.enabled,
+      /** Nur fuer Leistungsmessungen: Schattenwurf der Sonne und Detailreichweite. */
+      setShadows: (enabled: boolean) => {
+        this.sky.sun.castShadow = enabled
+      },
+      setLodRange: (range: number) => {
+        this.lod.range = range
+        this.lod.update(this.rig.camera.position, true)
+      },
+      /**
+       * Dreiecke je Modell im aktuellen Bild, fuer die Leistungsmessung der
+       * grossen Stadt. Gezaehlt wird, was sichtbar geschaltet ist - nicht, was
+       * Three nach dem Blickfeld-Schnitt tatsaechlich zeichnet.
+       */
+      renderBreakdown: () => {
+        const totals: Record<string, number> = {}
+        this.scene.traverseVisible((object) => {
+          const mesh = object as THREE.Mesh
+          if (!mesh.isMesh) return
+          const geometry = mesh.geometry
+          const tris = (geometry.index ? geometry.index.count : geometry.getAttribute('position').count) / 3
+          const count = (mesh as THREE.InstancedMesh).isInstancedMesh ? (mesh as THREE.InstancedMesh).count : 1
+          const key = (mesh.name || 'hafenviertel').split('|')[0]
+          totals[key] = (totals[key] ?? 0) + tris * count
+        })
+        return Object.entries(totals).sort((a, b) => b[1] - a[1]).slice(0, 14).map(([k, v]) => `${k}:${Math.round(v / 1000)}k`).join(' ')
+      },
       motion: () => this.motion.debugState(),
       save: () => this.save(true),
       closeOnboarding: () => this.hud.closeOnboarding(),
@@ -338,6 +371,12 @@ export class Game {
         figureProblem: this.figure.problem,
         mantling: this.player.isMantling,
         controlEnabled: this.player.controlEnabled,
+        city: this.lod.stats,
+        render: {
+          calls: this.renderer.info.render.calls,
+          triangles: this.renderer.info.render.triangles,
+          geometries: this.renderer.info.memory.geometries,
+        },
       }),
     }
   }
@@ -357,7 +396,7 @@ export class Game {
     }
 
     // Die Welt laeuft immer weiter - auch im Menue, im Dialog und beim Boarding.
-    this.water.update(elapsed)
+    this.water.update(elapsed, this.rig.camera.position)
     this.sky.update(delta, this.player.position)
     this.motion.update(delta)
     this.npcs.update(delta, this.player.position)
@@ -371,6 +410,7 @@ export class Game {
     const focus = seated && active ? active.position : this.player.position
     this.rig.setVehicleRoll(seated && active ? active.roll ?? 0 : 0)
     this.rig.update(delta, focus, seated ? 1.8 : 1.25)
+    this.lod.update(this.rig.camera.position)
 
     this.hud.drawMinimap(
       focus.x,
@@ -392,6 +432,7 @@ export class Game {
       this.save(false)
     }
 
+    this.renderer.info.reset()
     this.post.render(this.scene, this.rig.camera)
     this.input.endFrame()
   }

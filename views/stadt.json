@@ -1,0 +1,12 @@
+[
+  { "name": "stadt-hafen-west", "pos": [-200, 0.4, 20], "yaw": 1.5708 },
+  { "name": "stadt-promenade", "pos": [120, 0.4, 29], "yaw": -1.5708 },
+  { "name": "stadt-terrasse", "pos": [0, 10.4, -78], "yaw": 3.1416 },
+  { "name": "stadt-oberstadt-blick", "pos": [40, 10.4, -120], "yaw": 0, "pitch": -0.25 },
+  { "name": "stadt-downtown", "pos": [0, 10.4, -250], "yaw": 0.4 },
+  { "name": "stadt-stadion", "pos": [320, 10.4, -357], "yaw": 0 },
+  { "name": "stadt-dome", "pos": [150, 10.4, -400], "yaw": -1.5708 },
+  { "name": "stadt-skatepark", "pos": [-310, 0.4, 3], "yaw": 3.1416 },
+  { "name": "stadt-park", "pos": [200, 10.4, -470], "yaw": 1.2 },
+  { "name": "stadt-nordrand", "pos": [100, 10.4, -560], "yaw": 0 }
+]
