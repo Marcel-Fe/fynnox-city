@@ -1,4 +1,5 @@
 import { chromium } from 'playwright'
+import { launchOptions } from './tools/launch.mjs'
 import { mkdirSync } from 'node:fs'
 
 const OUT = process.argv[2] ?? './shots'
@@ -11,7 +12,7 @@ const check = (name, ok, detail = '') => {
   console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? ' :: ' + detail : ''}`)
 }
 
-const browser = await chromium.launch()
+const browser = await chromium.launch(launchOptions())
 const page = await browser.newPage({ viewport: { width: 1280, height: 780 } })
 // Playwright bricht jede Aktion nach 30 s ab. Im Softwarerenderer dieser
 // Abnahme braucht ein Bild bis zu 3 s - schon ein Klick wartet danach auf ein

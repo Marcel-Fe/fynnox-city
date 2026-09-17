@@ -1,4 +1,5 @@
 ﻿import { chromium } from 'playwright'
+import { launchOptions } from './tools/launch.mjs'
 import { mkdirSync } from 'node:fs'
 
 const OUT = process.argv[2] ?? './shots'
@@ -22,7 +23,7 @@ function check(name, ok, detail = '') {
  * nahm still die Standardzeit von 30 s - der Lauf brach dann mit "Timeout
  * 30000ms" ab, obwohl im Code 90000 stand.
  */
-const browser = await chromium.launch()
+const browser = await chromium.launch(launchOptions())
 const page = await browser.newPage({ viewport: { width: 1280, height: 780 } })
 /**
  * Playwright bricht jede Aktion nach 30 s ab. Das ist fuer eine Maschine

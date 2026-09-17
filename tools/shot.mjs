@@ -12,6 +12,7 @@
  * -Z, -PI/2 = Blick nach +X.
  */
 import { chromium } from 'playwright'
+import { launchOptions } from './launch.mjs'
 import { mkdirSync, readFileSync } from 'node:fs'
 
 const OUT = process.argv[2] ?? './shots'
@@ -24,7 +25,7 @@ if (!VIEWS) {
 const views = JSON.parse(readFileSync(VIEWS, 'utf8'))
 mkdirSync(OUT, { recursive: true })
 
-const browser = await chromium.launch()
+const browser = await chromium.launch(launchOptions())
 const page = await browser.newPage({ viewport: { width: 1280, height: 780 } })
 await page.goto(URL, { waitUntil: 'networkidle' })
 await page.waitForFunction(() => window.fynnoxQa !== undefined, null, { timeout: 90000 })
